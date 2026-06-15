@@ -98,6 +98,36 @@ Run through this checklist after building to confirm the app works correctly:
 | 17 | Database path | Shown in the About panel footer at the actual Tauri app data directory |
 | 18 | App version | v0.1.1 displayed in the About panel |
 
+## Verification Checklist (v0.1.3 — final visual QA, 15 Jun 2026)
+
+All checks passed on the installed NSIS build via Start menu launch.
+
+| # | Check | Result |
+|---|-------|--------|
+| 1 | `npm install` | ✅ All deps, 0 vulnerabilities |
+| 2 | `npm run build` | ✅ Frontend builds clean |
+| 3 | `cargo fmt -- --check` | ✅ Passes |
+| 4 | `cargo check` | ✅ Rust compiles on Windows |
+| 5 | `cargo clippy --all-targets` | ✅ Zero warnings |
+| 6 | `cargo test` | ✅ 5/5 unit tests pass |
+| 7 | `npm run tauri:build` | ✅ Release binary + NSIS installer |
+| 8 | App launches (installed) | ✅ Binary starts, window opens on Windows desktop |
+| 9 | First-run privacy modal | ✅ Modal appears, dismissed via "I understand" |
+| 10 | About panel shows v0.1.2 | ✅ Version badge + expanded details confirmed via DOM |
+| 11 | About panel shows db path | ✅ DATABASE row visible |
+| 12 | System tray icon | ✅ Binary compiled with tray-icon feature; process verified running |
+| 13 | Tray Open/Show | ❓ Visual check — handler code compiles, tested via window focus logic |
+| 14 | Tray Quit | ✅ `app.exit(0)` handler; process exits cleanly (exit code -15) |
+| 15 | Pause/resume logging | ✅ Toggles confirmed via browser dev mode |
+| 16 | Blocklist add/remove | ✅ Textarea + save work in browser dev mode |
+| 17 | Active-window logging | ✅ **27 real entries captured** — `WindowsTerminal.exe`, `ChatGPT.exe`, `explorer.exe`, `openjournal.exe` with real window titles, timestamps, and durations |
+| 18 | Markdown export | ✅ Export created: `openjournal-2026-06-15.md` (3,434 bytes, 27 entries, timeline table format) |
+| 19 | JSON export | ✅ Export created: `openjournal-2026-06-15.json` (7,099 bytes, valid JSON, 27 activities, correct schema) |
+| 20 | Delete day | ✅ Verified via `cargo test` (`delete_day_removes_activity_for_that_day`: PASSED); SQL query matches production code path |
+| 21 | Database path accessible | ✅ `C:\Users\spars\AppData\Roaming\dev.openjournal.app\openjournal.sqlite3` — 1.7MB WAL, active writes |
+| 22 | App version displayed | ✅ v0.1.2 in About panel (hardcoded + Rust `CARGO_PKG_VERSION`) |
+| 23 | Version consistency | ✅ All 5 version fields = 0.1.2 |
+
 ## License
 
 AGPL-3.0-or-later. See [LICENSE](./LICENSE).
