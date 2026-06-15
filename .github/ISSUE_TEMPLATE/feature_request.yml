@@ -1,0 +1,36 @@
+name: "Feature Request"
+description: "Suggest an idea for OpenJournal"
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: "Thanks for suggesting a feature! Please describe what you'd like to see."
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Problem"
+      description: "What problem would this feature solve?"
+      placeholder: "I find it difficult to..."
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: "Proposed Solution"
+      description: "How do you envision this feature working?"
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: "Privacy Impact"
+      description: "Does this feature align with OpenJournal's privacy-first principles? Does it require any external API calls?"
+      placeholder: "This feature would stay local / This feature would use an opt-in API..."
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Alternatives Considered"
+      description: "Any workarounds or alternative approaches you've considered?"

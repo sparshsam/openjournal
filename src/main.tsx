@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import './style.css';
 
-const APP_VERSION = '0.1.2';
+const APP_VERSION = '0.1.3';
 
 type ActivityEntry = {
   id: number;
