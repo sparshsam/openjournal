@@ -1,6 +1,6 @@
 [package]
 name = "openjournal"
-version = "0.1.1"
+version = "0.1.2"
 description = "Privacy-first local activity journal for Windows"
 authors = ["OpenJournal contributors"]
 license = "AGPL-3.0-or-later"
