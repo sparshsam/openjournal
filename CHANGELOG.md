@@ -5,6 +5,27 @@ All notable changes to OpenJournal will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - Unreleased
+
+### Added
+
+- AI summary provider abstraction with LM Studio and Ollama support
+- AI settings page (configurable via Tauri commands)
+- `ai_summaries` database table for storing generated summaries
+- `ai_config` database table for persistent AI provider configuration
+- Structured prompt builder for 3-hour activity blocks
+- Provider test-connection command
+- Manual summary generation, regenerate, and delete controls
+- Background generation with 30s timeout, 2-retry limit
+- Local-first design: all data stays on device; providers are opt-in
+
+### Changed
+
+- Rewrote `summarizer.rs` with block aggregation and prompt builder
+- Updated `storage.rs` with AI config and summary CRUD
+- Updated `lib.rs` with 6 new AI-specific Tauri commands
+- Added `reqwest` dependency for provider HTTP calls
+
 ## [0.1.3] - 2026-06-15
 
 ### Changed

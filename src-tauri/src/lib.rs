@@ -1,6 +1,7 @@
 mod activity_tracker;
 mod export;
 mod models;
+mod provider;
 mod storage;
 mod summarizer;
 
@@ -8,8 +9,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use activity_tracker::ActivityTracker;
-use models::{ActivityEntry, AppStatus, SummaryBlock};
+use models::{ActivityEntry, AiSummary, AppStatus, SummaryBlock};
+use provider::{create_provider, AiConfig, ConnectionTestResult};
 use storage::Storage;
+use summarizer::{aggregate_blocks, build_summary_prompt};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, State};
@@ -105,6 +108,115 @@ fn delete_day(day: String, state: State<'_, AppState>) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
+// -----------------------------------------------------------------------
+// v0.2 AI summary commands
+// -----------------------------------------------------------------------
+
+#[tauri::command]
+fn get_ai_config(state: State<'_, AppState>) -> Result<AiConfig, String> {
+    state
+        .storage
+        .get_ai_config()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_ai_config(config: AiConfig, state: State<'_, AppState>) -> Result<(), String> {
+    state
+        .storage
+        .set_ai_config(&config)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn test_ai_connection(config: AiConfig) -> Result<ConnectionTestResult, String> {
+    let provider = create_provider(&config).map_err(|e| e.to_string())?;
+    // Spawn blocking I/O on a background thread
+    let result = tokio::task::spawn_blocking(move || provider.test_connection())
+        .await
+        .map_err(|e| format!("test connection task failed: {e}"))?
+        .map_err(|e| e.to_string())?;
+    Ok(result)
+}
+
+#[tauri::command]
+async fn generate_ai_summary(
+    day: String,
+    block_index: i32,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let config = state.storage.get_ai_config().map_err(|e| e.to_string())?;
+    if !config.enabled {
+        return Err("AI summaries are disabled".to_string());
+    }
+
+    let activities = state
+        .storage
+        .activity_for_day(&day)
+        .map_err(|e| e.to_string())?;
+    let blocks = aggregate_blocks(&day, &activities);
+    let block = blocks
+        .into_iter()
+        .find(|b| {
+            let hour = (block_index as u32) * 3;
+            // Match by block_start format "HH:MM"
+            let label = format!("{:02}:00", hour);
+            b.block_start == label
+        })
+        .ok_or_else(|| format!("No activity data for block index {block_index}"))?;
+
+    if block.entries.is_empty() {
+        return Err("No activity in this block".to_string());
+    }
+
+    let prompt = build_summary_prompt(&block);
+    let provider = create_provider(&config).map_err(|e| e.to_string())?;
+
+    let result = tokio::task::spawn_blocking(move || provider.generate_summary(&prompt))
+        .await
+        .map_err(|e| format!("summary task failed: {e}"))?
+        .map_err(|e| e.to_string())?;
+
+    // Store to DB
+    let now = chrono::Utc::now().to_rfc3339();
+    let summary_json = serde_json::to_string(&result).unwrap_or_default();
+    let ai_summary = AiSummary {
+        id: 0,
+        day: day.clone(),
+        block_index,
+        block_start: result.block_start.clone(),
+        block_end: result.block_end.clone(),
+        summary_json,
+        model_name: result.model_used.clone(),
+        generated_at: now,
+        token_count: None,
+        status: "completed".to_string(),
+        error_message: None,
+    };
+    state
+        .storage
+        .upsert_ai_summary(&ai_summary)
+        .map_err(|e| e.to_string())?;
+
+    Ok(serde_json::to_string(&result).unwrap_or_default())
+}
+
+#[tauri::command]
+fn get_ai_summaries(day: String, state: State<'_, AppState>) -> Result<Vec<AiSummary>, String> {
+    state
+        .storage
+        .get_ai_summaries_for_day(&day)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_ai_summary(summary_id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    state
+        .storage
+        .delete_ai_summary(summary_id)
+        .map_err(|e| e.to_string())
+}
+
 fn app_data_dir(app: &AppHandle) -> anyhow::Result<PathBuf> {
     let dir = app.path().app_data_dir()?;
     std::fs::create_dir_all(&dir)?;
@@ -174,7 +286,14 @@ pub fn run() {
             get_summary_blocks,
             set_blocklist,
             export_day,
-            delete_day
+            delete_day,
+            // v0.2 AI commands
+            get_ai_config,
+            set_ai_config,
+            test_ai_connection,
+            generate_ai_summary,
+            get_ai_summaries,
+            delete_ai_summary,
         ])
         .run(tauri::generate_context!())
         .expect("error while running OpenJournal");

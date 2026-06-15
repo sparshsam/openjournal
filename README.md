@@ -169,9 +169,53 @@ cargo test
 | Version | Focus |
 |---------|-------|
 | **v0.1** ✅ | Core architecture, local tracking, exports, privacy controls |
-| **v0.2** 🔜 | Local AI summaries via LM Studio / OpenAI-compatible endpoints |
+| **v0.2** 🚧 | **Local AI summaries** — LM Studio/Ollama provider, prompt builder, AI settings, manual generation controls |
 | **v0.3** 🔜 | Multi-day views, calendar navigation, search |
 | **v0.4** 🔜 | Optional encrypted backup / restore |
+
+## AI Summaries (v0.2)
+
+OpenJournal v0.2 introduces optional AI-powered 3-hour summaries. AI is **disabled by default** — no data is sent anywhere unless you explicitly enable it.
+
+### Supported Providers
+
+| Provider | Type | Default | Status |
+|----------|------|---------|--------|
+| **LM Studio** | Local (HTTP) | `http://localhost:1234/v1` | ✅ Implemented |
+| **Ollama** | Local (HTTP) | `http://localhost:11434` | ✅ Implemented |
+| **OpenAI-compatible** | Remote (opt-in) | — | Scaffolded, disabled by default |
+
+### How It Works
+
+1. Activity is aggregated into **8 x 3-hour blocks** per day
+2. Each block's data (app names, durations, context switches) is combined into a structured prompt
+3. The prompt is sent to your configured local provider
+4. The AI returns a structured JSON summary (main focus, apps, context switches, notes, plain-English summary)
+5. The summary is stored locally in SQLite
+
+### Privacy
+
+- ✅ **AI is off by default.** OpenJournal works exactly as before when no provider is configured.
+- ✅ **LM Studio and Ollama run locally.** No data leaves your machine.
+- ✅ **External providers are opt-in.** You must explicitly enable and configure them.
+- ✅ **No telemetry.** OpenJournal never sends usage data.
+- ✅ **All prompts are generated from local data only.** App names, window titles, and durations — no keystrokes, clipboard, or passwords.
+
+### Setup
+
+1. Install [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/)
+2. Load a model (e.g., `llama3.2` for Ollama, or any model in LM Studio)
+3. In OpenJournal, go to **AI Settings**
+4. Enable AI, select your provider, and enter the base URL
+5. Click **Test Connection** to verify
+6. Click **Generate Summary** on any 3-hour block
+
+### Provider Endpoints
+
+| Provider | Default URL | API Format |
+|----------|-------------|------------|
+| LM Studio | `http://localhost:1234/v1` | OpenAI-compatible `/v1/chat/completions` |
+| Ollama | `http://localhost:11434` | Ollama `/api/chat` |
 
 See [ROADMAP.md](./ROADMAP.md) for the full plan.
 

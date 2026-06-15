@@ -5,6 +5,8 @@ use chrono::{DateTime, Duration, NaiveDate, Utc};
 use rusqlite::{params, Connection};
 
 use crate::models::ActivityEntry;
+use crate::models::AiSummary;
+use crate::provider::AiConfig;
 
 #[derive(Clone)]
 pub struct Storage {
@@ -69,6 +71,29 @@ impl Storage {
               payload_json TEXT NOT NULL,
               created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
               UNIQUE(day, block_start, provider)
+            );
+
+            -- v0.2: AI summary storage
+            CREATE TABLE IF NOT EXISTS ai_summaries (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              day TEXT NOT NULL,
+              block_index INTEGER NOT NULL,
+              block_start TEXT NOT NULL,
+              block_end TEXT NOT NULL,
+              summary_json TEXT NOT NULL DEFAULT '{}',
+              model_name TEXT NOT NULL DEFAULT '',
+              generated_at TEXT,
+              token_count INTEGER,
+              status TEXT NOT NULL DEFAULT 'pending',
+              error_message TEXT,
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              UNIQUE(day, block_index, model_name)
+            );
+
+            -- v0.2: AI provider config (singleton row)
+            CREATE TABLE IF NOT EXISTS ai_config (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL
             );
             "#,
         )?;
@@ -215,6 +240,118 @@ impl Storage {
             "#,
             params![key, if value { "true" } else { "false" }],
         )?;
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // AI config
+    // -----------------------------------------------------------------------
+
+    pub fn get_ai_config(&self) -> anyhow::Result<AiConfig> {
+        let connection = self.connection.lock().expect("storage lock failed");
+        let mut stmt = connection.prepare("SELECT value FROM ai_config WHERE key = ?1")?;
+        let json_str: Option<String> = stmt
+            .query_row(params!["config"], |row| row.get(0))
+            .ok();
+        drop(stmt);
+        match json_str {
+            Some(json) => Ok(serde_json::from_str(&json)?),
+            None => Ok(AiConfig::default()),
+        }
+    }
+
+    pub fn set_ai_config(&self, config: &AiConfig) -> anyhow::Result<()> {
+        let json = serde_json::to_string(config)?;
+        let connection = self.connection.lock().expect("storage lock failed");
+        connection.execute(
+            r#"
+            INSERT INTO ai_config(key, value)
+            VALUES ('config', ?1)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            "#,
+            params![json],
+        )?;
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // AI summaries CRUD
+    // -----------------------------------------------------------------------
+
+    pub fn upsert_ai_summary(&self, summary: &AiSummary) -> anyhow::Result<()> {
+        let connection = self.connection.lock().expect("storage lock failed");
+        connection.execute(
+            r#"
+            INSERT INTO ai_summaries
+              (day, block_index, block_start, block_end, summary_json,
+               model_name, generated_at, token_count, status, error_message)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            ON CONFLICT(day, block_index, model_name) DO UPDATE SET
+              summary_json = excluded.summary_json,
+              generated_at = excluded.generated_at,
+              token_count = excluded.token_count,
+              status = excluded.status,
+              error_message = excluded.error_message
+            "#,
+            params![
+                summary.day,
+                summary.block_index,
+                summary.block_start,
+                summary.block_end,
+                summary.summary_json,
+                summary.model_name,
+                summary.generated_at,
+                summary.token_count,
+                summary.status,
+                summary.error_message,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_ai_summaries_for_day(&self, day: &str) -> anyhow::Result<Vec<AiSummary>> {
+        let connection = self.connection.lock().expect("storage lock failed");
+        let mut stmt = connection.prepare(
+            r#"
+            SELECT id, day, block_index, block_start, block_end,
+                   summary_json, model_name, generated_at, token_count,
+                   status, error_message
+            FROM ai_summaries
+            WHERE day = ?1
+            ORDER BY block_index ASC
+            "#,
+        )?;
+        let rows = stmt.query_map(params![day], |row| {
+            Ok(AiSummary {
+                id: row.get(0)?,
+                day: row.get(1)?,
+                block_index: row.get(2)?,
+                block_start: row.get(3)?,
+                block_end: row.get(4)?,
+                summary_json: row.get(5)?,
+                model_name: row.get(6)?,
+                generated_at: row.get(7)?,
+                token_count: row.get(8)?,
+                status: row.get(9)?,
+                error_message: row.get(10)?,
+            })
+        })?;
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row?);
+        }
+        Ok(result)
+    }
+
+    pub fn delete_ai_summary(&self, id: i64) -> anyhow::Result<()> {
+        let connection = self.connection.lock().expect("storage lock failed");
+        connection.execute("DELETE FROM ai_summaries WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn delete_ai_summaries_for_day(&self, day: &str) -> anyhow::Result<()> {
+        let connection = self.connection.lock().expect("storage lock failed");
+        connection.execute("DELETE FROM ai_summaries WHERE day = ?1", params![day])?;
         Ok(())
     }
 }

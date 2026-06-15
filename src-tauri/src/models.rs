@@ -35,3 +35,31 @@ pub struct ExportBundle {
     pub activities: Vec<ActivityEntry>,
     pub summaries: Vec<SummaryBlock>,
 }
+
+/// AI-generated summary record stored in the DB.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiSummary {
+    pub id: i64,
+    pub day: String,
+    pub block_index: i32,         // 0-7 (8 x 3-hour blocks)
+    pub block_start: String,
+    pub block_end: String,
+    pub summary_json: String,     // full JSON payload from provider
+    pub model_name: String,
+    pub generated_at: String,
+    pub token_count: Option<i64>,
+    pub status: String,           // pending | completed | failed
+    pub error_message: Option<String>,
+}
+
+/// The aggregated data sent to the prompt builder.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockActivity {
+    pub block_start: String,
+    pub block_end: String,
+    pub entries: Vec<ActivityEntry>,
+    pub total_focus_seconds: i64,
+    pub context_switches: usize,
+    pub app_breakdown: Vec<(String, i64)>,  // (app_name, total_seconds)
+    pub idle_minutes: i64,
+}

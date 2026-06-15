@@ -1,6 +1,6 @@
 # OpenJournal Roadmap
 
-## v0.1
+## v0.1 ✅ (Released)
 
 - Windows desktop app with Tauri.
 - System tray app lifecycle.
@@ -15,17 +15,28 @@
 - In-app privacy notice.
 - No screenshots, keylogging, clipboard capture, typed-text capture, password capture, or cloud sync.
 
-## v0.2
+## v0.2 (In Progress)
 
-- Local LM Studio/OpenAI-compatible summary provider.
-- Summary generation for each 3-hour block.
-- Summary persistence in `summary_blocks`.
-- Provider configuration UI with explicit data-sharing warning.
-- Regenerate summary per block.
-- Redaction preview before summarization.
-- Better app/project naming rules.
+### Completed
 
-## v0.3
+- ✅ Provider abstraction (`SummaryProvider` trait) with LM Studio, Ollama, and OpenAI-compatible implementations
+- ✅ `ai_summaries` database table with status tracking (pending, completed, failed)
+- ✅ `ai_config` table for persistent provider configuration
+- ✅ Structured prompt builder for 3-hour activity blocks
+- ✅ Block aggregation with total focus time, app breakdown, context switches, idle periods
+- ✅ Provider test-connection command
+- ✅ Manual generation, regenerate, and delete controls via Tauri commands
+- ✅ Background generation with 30s timeout and 2-retry limit
+
+### Remaining
+
+- Frontend AI settings page (provider config, test button)
+- Summary display UI with generation status indicators
+- Warning modal for external providers
+- Documentation updates for provider setup
+- Full end-to-end testing with local provider
+
+## v0.3 🔜
 
 - Search and filters.
 - Tags and manual annotations.
