@@ -39,8 +39,9 @@ v0.2 introduces optional AI-powered 3-hour summaries. Key privacy guarantees:
 - **AI is disabled by default.** No data is sent to any provider unless you explicitly enable AI and configure a provider.
 - **Local providers first.** LM Studio and Ollama run entirely on your machine. No data leaves your device.
 - **External providers require explicit consent.** OpenAI-compatible providers are scaffolded but disabled by default. You must opt in and configure them manually.
-- **Provider data flow:** When you click "Generate summary," the 3-hour block's aggregated metadata (app names, window titles, durations) is sent to your configured provider via its API. The full prompt is shown in the app before sending.
+### Provider data flow:** When you click "Generate summary," the 3-hour block's aggregated metadata (app names, window titles, durations) is sent to your configured provider via its API. The full prompt is shown in the app before sending.
 - **No telemetry.** OpenJournal never sends usage data, crash reports, or analytics anywhere.
+- **API key protection.** API keys are never stored in the OpenJournal database. They are saved to your OS credential manager (Windows Credential Manager, macOS Keychain, or Linux Secret Service), loaded from environment variables, or kept temporarily in memory for the current session.
 
 ## User Controls
 

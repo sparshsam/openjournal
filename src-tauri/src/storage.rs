@@ -7,6 +7,7 @@ use rusqlite::{params, Connection};
 use crate::models::ActivityEntry;
 use crate::models::AiSummary;
 use crate::provider::AiConfig;
+use crate::credential::{self, CredentialKey};
 
 #[derive(Clone)]
 pub struct Storage {
@@ -261,7 +262,10 @@ impl Storage {
     }
 
     pub fn set_ai_config(&self, config: &AiConfig) -> anyhow::Result<()> {
-        let json = serde_json::to_string(config)?;
+        // Strip API key — never store in SQLite
+        let mut safe = config.clone();
+        safe.api_key = String::new();
+        let json = serde_json::to_string(&safe)?;
         let connection = self.connection.lock().expect("storage lock failed");
         connection.execute(
             r#"
@@ -271,6 +275,35 @@ impl Storage {
             "#,
             params![json],
         )?;
+        Ok(())
+    }
+
+    /// Migrate any existing plaintext API key from the old ai_config table
+    /// into the OS credential store, then clear it.
+    pub fn migrate_plaintext_keys(&self) -> anyhow::Result<()> {
+        let connection = self.connection.lock().expect("storage lock failed");
+        let mut stmt = connection.prepare("SELECT value FROM ai_config WHERE key = 'config'")?;
+        let json_str: Option<String> = stmt.query_row([], |row| row.get(0)).ok();
+        drop(stmt);
+
+        if let Some(json) = json_str {
+            if let Ok(config) = serde_json::from_str::<AiConfig>(&json) {
+                if !config.api_key.is_empty() {
+                    // Save to credential store
+                    credential::save_credential(&CredentialKey::DeepSeek, &config.api_key)?;
+                    // Clear from SQLite
+                    let mut safe = config.clone();
+                    safe.api_key = String::new();
+                    let clean_json = serde_json::to_string(&safe)?;
+                    let conn = self.connection.lock().expect("storage lock failed");
+                    conn.execute(
+                        "UPDATE ai_config SET value = ?1 WHERE key = 'config'",
+                        rusqlite::params![clean_json],
+                    )?;
+                    eprintln!("[OpenJournal] Migrated plaintext API key to OS credential store.");
+                }
+            }
+        }
         Ok(())
     }
 

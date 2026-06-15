@@ -1076,6 +1076,74 @@ textarea {
   font-size: 12px;
 }
 
+/* ── API Key Status ── */
+
+.ai-key-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.key-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+.key-source-badge.source-env {
+  color: #137b43;
+  background: #eaf8f0;
+}
+
+.key-source-badge.source-credential {
+  color: #5b21b6;
+  background: #f3e8ff;
+}
+
+.key-source-badge.source-session {
+  color: #a65100;
+  background: #fff3e2;
+}
+
+.key-source-badge.source-missing {
+  color: #b42318;
+  background: #fef3f2;
+}
+
+.key-masked {
+  font-family: ui-monospace, 'SF Mono', monospace;
+  font-size: 12px;
+  color: #697589;
+  letter-spacing: 0.5px;
+}
+
+.ai-key-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ai-key-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.ai-note {
+  font-size: 11px;
+  color: #697589;
+  background: #f8fafd;
+  padding: 8px 10px;
+  border-radius: 6px;
+  line-height: 1.4;
+  border: 1px solid #e1e8f2;
+}
+
 @media (max-width: 1180px) {
   body {
     min-width: 0;

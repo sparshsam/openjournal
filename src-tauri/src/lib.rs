@@ -1,4 +1,5 @@
 mod activity_tracker;
+mod credential;
 mod export;
 mod models;
 mod provider;
@@ -9,6 +10,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use activity_tracker::ActivityTracker;
+use credential::{ApiKeyStatus, CredentialKey};
 use models::{ActivityEntry, AiSummary, AppStatus, SummaryBlock};
 use provider::{create_provider, AiConfig, ConnectionTestResult};
 use storage::Storage;
@@ -122,18 +124,23 @@ fn delete_day(day: String, state: State<'_, AppState>) -> Result<(), String> {
 
 #[tauri::command]
 fn get_ai_config(state: State<'_, AppState>) -> Result<AiConfig, String> {
-    state
-        .storage
-        .get_ai_config()
-        .map_err(|e| e.to_string())
+    let mut config = state.storage.get_ai_config().map_err(|e| e.to_string())?;
+    // Never send the stored API key to the frontend — resolve from env/credential
+    config.api_key = String::new();
+    Ok(config)
 }
 
 #[tauri::command]
 fn set_ai_config(config: AiConfig, state: State<'_, AppState>) -> Result<(), String> {
-    state
-        .storage
-        .set_ai_config(&config)
-        .map_err(|e| e.to_string())
+    // If a new API key was provided, save it to the credential store
+    if !config.api_key.is_empty() {
+        credential::save_credential(&CredentialKey::DeepSeek, &config.api_key)
+            .map_err(|e| format!("Failed to save API key: {e}"))?;
+    }
+    // Strip key before saving to SQLite
+    let mut safe = config.clone();
+    safe.api_key = String::new();
+    state.storage.set_ai_config(&safe).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -153,10 +160,18 @@ async fn generate_ai_summary(
     block_index: i32,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let config = state.storage.get_ai_config().map_err(|e| e.to_string())?;
+    let mut config = state.storage.get_ai_config().map_err(|e| e.to_string())?;
     if !config.enabled {
         return Err("AI summaries are disabled".to_string());
     }
+
+    // Resolve API key from env → credential store → session (from config.api_key)
+    let (resolved_key, source) = credential::resolve_api_key(&config.api_key);
+    if resolved_key.is_empty() {
+        return Err("No API key found. Set OPENJOURNAL_DEEPSEEK_API_KEY or save a key in AI Settings.".to_string());
+    }
+    config.api_key = resolved_key;
+    let _ = source; // used for logging if needed
 
     let activities = state
         .storage
@@ -167,7 +182,6 @@ async fn generate_ai_summary(
         .into_iter()
         .find(|b| {
             let hour = (block_index as u32) * 3;
-            // Match by block_start format "HH:MM"
             let label = format!("{:02}:00", hour);
             b.block_start == label
         })
@@ -185,7 +199,6 @@ async fn generate_ai_summary(
         .map_err(|e| format!("summary task failed: {e}"))?
         .map_err(|e| e.to_string())?;
 
-    // Store to DB
     let now = chrono::Utc::now().to_rfc3339();
     let summary_json = serde_json::to_string(&result).unwrap_or_default();
     let ai_summary = AiSummary {
@@ -266,6 +279,24 @@ fn get_masked_api_key() -> Result<String, String> {
     }
 }
 
+#[tauri::command]
+fn get_api_key_status() -> Result<ApiKeyStatus, String> {
+    // No session override from the frontend — use env/credential only
+    Ok(credential::get_api_key_status(""))
+}
+
+#[tauri::command]
+fn save_credential_api_key(key: String) -> Result<(), String> {
+    credential::save_credential(&CredentialKey::DeepSeek, &key)
+        .map_err(|e| format!("Failed to save: {e}"))
+}
+
+#[tauri::command]
+fn delete_credential_api_key() -> Result<(), String> {
+    credential::delete_credential(&CredentialKey::DeepSeek)
+        .map_err(|e| format!("Failed to delete: {e}"))
+}
+
 fn app_data_dir(app: &AppHandle) -> anyhow::Result<PathBuf> {
     let dir = app.path().app_data_dir()?;
     std::fs::create_dir_all(&dir)?;
@@ -321,6 +352,8 @@ pub fn run() {
             let data_dir = app_data_dir(app.handle())?;
             let storage = Storage::open(data_dir.join("openjournal.sqlite3"))?;
             storage.migrate()?;
+            // Migrate any plaintext API keys from old configs to credential store
+            let _ = storage.migrate_plaintext_keys();
             let tracker = Arc::new(Mutex::new(ActivityTracker::new(storage.clone())?));
             install_tray(app, tracker.clone())?;
             activity_tracker::spawn_poll_loop(tracker.clone());
@@ -345,6 +378,9 @@ pub fn run() {
             delete_ai_summary,
             get_environment_provider_status,
             get_masked_api_key,
+            get_api_key_status,
+            save_credential_api_key,
+            delete_credential_api_key,
         ])
         .run(tauri::generate_context!())
         .expect("error while running OpenJournal");

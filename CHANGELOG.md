@@ -5,6 +5,31 @@ All notable changes to OpenJournal will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - Unreleased
+
+### Added
+
+- Secure credential storage via OS Credential Manager / Keychain / Secret Service
+- `credential` Rust module wrapping the `keyring` crate with cross-platform support
+- API key source indicator in UI: Environment, Credential Manager, Session, or Missing
+- `save_credential_api_key`, `delete_credential_api_key`, `get_api_key_status` Tauri commands
+- Plaintext API key migration on startup (detect → move to credential store → delete)
+- Masked API key display (`sk-••••••••abcd`) never exposing full keys
+
+### Changed
+
+- **Security**: API keys are never stored in SQLite — stripped before `set_ai_config`
+- `get_ai_config` now returns empty `api_key` field to frontend
+- `generate_ai_summary` resolves API key from env → credential store → session
+- AI Settings UI replaced API key input with source badge + save/remove/session-override actions
+- Added `ai-note` explaining keys are never stored in the database
+- Added key source CSS badges (env green, credential purple, session amber, missing red)
+
+### Fixed
+
+- Plaintext API keys from v0.2.0 are migrated to secure storage on first launch
+- Tests now save/restore environment variables to avoid cross-test contamination
+
 ## [0.2.1] - Unreleased
 
 ### Added

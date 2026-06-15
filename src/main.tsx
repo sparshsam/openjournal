@@ -73,10 +73,11 @@ type AiSummary = {
   error_message: string | null;
 };
 
-type EnvStatus = {
-  deepseek_key_found: boolean;
-  deepseek_key_masked: string;
-  openjournal_key_found: boolean;
+type ApiKeyStatus = {
+  source: string;        // "env" | "credential" | "session" | "missing"
+  masked_key: string;    // "sk-••••••••abcd" or empty
+  has_env_var: boolean;
+  has_credential: boolean;
 };
 
 // -----------------------------------------------------------------------
@@ -262,7 +263,7 @@ function AboutPanel({ version, dbPath }: { version: string; dbPath: string }) {
 
 function AiSettingsPanel({
   config,
-  envStatus,
+  apiKeyStatus,
   connectionResult,
   testing,
   saving,
@@ -270,9 +271,11 @@ function AiSettingsPanel({
   onTest,
   onClear,
   onConfigChange,
+  onSaveApiKey,
+  onDeleteApiKey,
 }: {
   config: AiConfig;
-  envStatus: EnvStatus | null;
+  apiKeyStatus: ApiKeyStatus | null;
   connectionResult: ConnectionTestResult | null;
   testing: boolean;
   saving: boolean;
@@ -280,6 +283,8 @@ function AiSettingsPanel({
   onTest: () => void;
   onClear: () => void;
   onConfigChange: (cfg: AiConfig) => void;
+  onSaveApiKey: (key: string) => void;
+  onDeleteApiKey: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const preset = PROVIDER_PRESETS.find(p => p.id === config.provider);
@@ -355,25 +360,50 @@ function AiSettingsPanel({
               {/* API key */}
               <div className="ai-field">
                 <span className="ai-label">API Key</span>
-                <input
-                  className="ai-input"
-                  type="password"
-                  value={config.api_key}
-                  onChange={e => onConfigChange({ ...config, api_key: e.target.value })}
-                  placeholder={envStatus?.deepseek_key_masked ? 'Using environment variable' : 'Enter API key'}
-                />
+                <div className="ai-key-status">
+                  <span className={`key-source-badge source-${apiKeyStatus?.source || 'missing'}`}>
+                    {apiKeyStatus?.source === 'env' && <><Zap size={12} /> Environment</>}
+                    {apiKeyStatus?.source === 'credential' && <>🔑 Credential Manager</>}
+                    {apiKeyStatus?.source === 'session' && <>Session only</>}
+                    {(!apiKeyStatus || apiKeyStatus.source === 'missing') && <>❌ Missing</>}
+                  </span>
+                  {apiKeyStatus?.masked_key && (
+                    <span className="key-masked">{apiKeyStatus.masked_key}</span>
+                  )}
+                </div>
+                {apiKeyStatus?.has_env_var && (
+                  <div className="ai-env-indicator">
+                    <Zap size={12} />
+                    <span>Using environment variable</span>
+                  </div>
+                )}
+                {apiKeyStatus?.has_credential && (
+                  <div className="ai-env-indicator" style={{color:'#5b21b6',background:'#f3e8ff'}}>
+                    <span>Key stored in OS credential manager</span>
+                  </div>
+                )}
+                <div className="ai-key-actions">
+                  <input
+                    className="ai-input"
+                    type="password"
+                    value={config.api_key}
+                    onChange={e => onConfigChange({ ...config, api_key: e.target.value })}
+                    placeholder="Enter new API key to save..."
+                  />
+                  <div className="ai-key-buttons">
+                    <button className="primary-button small" onClick={() => onSaveApiKey(config.api_key)} disabled={!config.api_key} type="button">
+                      Save Key
+                    </button>
+                    <button className="danger-button small" onClick={onDeleteApiKey} type="button">
+                      Remove Key
+                    </button>
+                  </div>
+                </div>
               </div>
-              {envStatus?.deepseek_key_masked && !config.api_key && (
-                <div className="ai-env-indicator">
-                  <Zap size={12} />
-                  <span>Using env: {envStatus.deepseek_key_masked}</span>
-                </div>
-              )}
-              {!envStatus?.deepseek_key_found && !config.api_key && (
-                <div className="ai-env-indicator missing">
-                  <span>DeepSeek API key not found in environment.</span>
-                </div>
-              )}
+              <div className="ai-note">
+                API keys are never stored in the OpenJournal database.
+                Keys are saved to your OS credential manager.
+              </div>
 
               {/* Model */}
               <div className="ai-field">
@@ -408,9 +438,9 @@ function AiSettingsPanel({
                 </div>
               )}
 
-              {!envStatus?.deepseek_key_found && !config.api_key && config.provider === 'deepseek' && (
+              {!apiKeyStatus?.has_env_var && !apiKeyStatus?.has_credential && apiKeyStatus?.source === 'missing' && config.provider === 'deepseek' && (
                 <div className="ai-env-hint">
-                  Set <code>OPENJOURNAL_DEEPSEEK_API_KEY</code> or <code>DEEPSEEK_API_KEY</code> in your environment.
+                  Set <code>OPENJOURNAL_DEEPSEEK_API_KEY</code> or <code>DEEPSEEK_API_KEY</code> in your environment, or save a key below.
                 </div>
               )}
             </>
@@ -538,7 +568,7 @@ function App() {
   const [aiConfig, setAiConfig] = useState<AiConfig>({
     enabled: false, provider: 'deepseek', base_url: 'https://api.deepseek.com/v1', api_key: '', model: 'deepseek-chat',
   });
-  const [envStatus, setEnvStatus] = useState<EnvStatus | null>(null);
+  const [apiKeyStatus, setApiKeyStatus] = useState<ApiKeyStatus | null>(null);
   const [connectionResult, setConnectionResult] = useState<ConnectionTestResult | null>(null);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -568,11 +598,11 @@ function App() {
     // Load env status (safe in browser preview)
     if (canUseTauri) {
       try {
-        const [env, summaries] = await Promise.all([
-          invokeCommand<EnvStatus>('get_environment_provider_status'),
+        const [keyStatus, summaries] = await Promise.all([
+          invokeCommand<ApiKeyStatus>('get_api_key_status'),
           invokeCommand<AiSummary[]>('get_ai_summaries', { day: todayIso() }),
         ]);
-        setEnvStatus(env);
+        setApiKeyStatus(keyStatus);
         setAiSummaries(summaries);
         const cfg = await invokeCommand<AiConfig>('get_ai_config');
         setAiConfig(cfg);
@@ -636,6 +666,30 @@ function App() {
         await invokeCommand('set_ai_config', { config: defaults });
         setNotice('AI settings reset.');
       } catch { /* */ }
+    }
+  }
+
+  async function handleSaveApiKey(key: string) {
+    if (!canUseTauri || !key) return;
+    try {
+      await invokeCommand('save_credential_api_key', { key });
+      setNotice('API key saved to credential manager.');
+      const status = await invokeCommand<ApiKeyStatus>('get_api_key_status');
+      setApiKeyStatus(status);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : 'Failed to save API key.');
+    }
+  }
+
+  async function handleDeleteApiKey() {
+    if (!canUseTauri) return;
+    try {
+      await invokeCommand('delete_credential_api_key');
+      setNotice('API key removed from credential manager.');
+      const status = await invokeCommand<ApiKeyStatus>('get_api_key_status');
+      setApiKeyStatus(status);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : 'Failed to delete API key.');
     }
   }
 
@@ -765,7 +819,7 @@ function App() {
 
           <AiSettingsPanel
             config={aiConfig}
-            envStatus={envStatus}
+            apiKeyStatus={apiKeyStatus}
             connectionResult={connectionResult}
             testing={testing}
             saving={saving}
@@ -779,6 +833,8 @@ function App() {
                 setAiConfig(cfg);
               }
             }}
+            onSaveApiKey={handleSaveApiKey}
+            onDeleteApiKey={handleDeleteApiKey}
           />
 
           <section className="privacy-box" id="privacy">
@@ -857,7 +913,7 @@ function App() {
               </div>
             )}
 
-            {aiConfig.enabled && !aiConfig.api_key && !envStatus?.deepseek_key_found && (
+            {aiConfig.enabled && !aiConfig.api_key && !apiKeyStatus?.has_env_var && !apiKeyStatus?.has_credential && (
               <div className="ai-empty-state warning">
                 <AlertTriangle size={16} />
                 <p>DeepSeek API key not found.</p>
@@ -865,7 +921,7 @@ function App() {
               </div>
             )}
 
-            {aiConfig.enabled && (aiConfig.api_key || envStatus?.deepseek_key_found) && (
+            {aiConfig.enabled && (aiConfig.api_key || apiKeyStatus?.has_env_var || apiKeyStatus?.has_credential) && (
               <div className="ai-summary-list">
                 {BLOCK_LABELS.map((_label, idx) => (
                   <SummaryCard
@@ -883,7 +939,7 @@ function App() {
               </div>
             )}
 
-            {aiConfig.enabled && !envStatus?.deepseek_key_found && aiConfig.provider === 'lm_studio' && (
+            {aiConfig.enabled && !apiKeyStatus?.has_env_var && !apiKeyStatus?.has_credential && !aiConfig.api_key && aiConfig.provider === 'lm_studio' && (
               <div className="ai-empty-state">
                 <WifiOff size={16} />
                 <p>Configure LM Studio or Ollama to summarize locally.</p>
