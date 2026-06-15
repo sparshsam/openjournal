@@ -17,6 +17,14 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, State};
 
+/// Status of environment variables for each provider
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct EnvProviderStatus {
+    pub deepseek_key_found: bool,
+    pub deepseek_key_masked: String,
+    pub openjournal_key_found: bool,
+}
+
 struct AppState {
     storage: Storage,
     tracker: Arc<Mutex<ActivityTracker>>,
@@ -217,6 +225,47 @@ fn delete_ai_summary(summary_id: i64, state: State<'_, AppState>) -> Result<(), 
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn get_environment_provider_status() -> Result<EnvProviderStatus, String> {
+    let deepseek_env = std::env::var("DEEPSEEK_API_KEY").ok();
+    let openjournal_env = std::env::var("OPENJOURNAL_DEEPSEEK_API_KEY").ok();
+    let preferred = openjournal_env.clone().or_else(|| deepseek_env.clone());
+    let masked = preferred
+        .as_ref()
+        .map(|key| {
+            let len = key.len();
+            if len > 8 {
+                format!("sk-••••••••{}", &key[len - 4..])
+            } else {
+                "sk-••••".to_string()
+            }
+        })
+        .unwrap_or_default();
+    Ok(EnvProviderStatus {
+        deepseek_key_found: deepseek_env.is_some(),
+        deepseek_key_masked: masked,
+        openjournal_key_found: openjournal_env.is_some(),
+    })
+}
+
+#[tauri::command]
+fn get_masked_api_key() -> Result<String, String> {
+    let key = std::env::var("OPENJOURNAL_DEEPSEEK_API_KEY")
+        .ok()
+        .or_else(|| std::env::var("DEEPSEEK_API_KEY").ok());
+    match key {
+        Some(k) if !k.is_empty() => {
+            let len = k.len();
+            if len > 8 {
+                Ok(format!("sk-••••••••{}", &k[len - 4..]))
+            } else {
+                Ok("sk-••••".to_string())
+            }
+        }
+        _ => Ok(String::new()),
+    }
+}
+
 fn app_data_dir(app: &AppHandle) -> anyhow::Result<PathBuf> {
     let dir = app.path().app_data_dir()?;
     std::fs::create_dir_all(&dir)?;
@@ -294,6 +343,8 @@ pub fn run() {
             generate_ai_summary,
             get_ai_summaries,
             delete_ai_summary,
+            get_environment_provider_status,
+            get_masked_api_key,
         ])
         .run(tauri::generate_context!())
         .expect("error while running OpenJournal");

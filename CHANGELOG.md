@@ -5,6 +5,31 @@ All notable changes to OpenJournal will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - Unreleased
+
+### Added
+
+- DeepSeek as default AI provider (⭐ Recommended)
+- Full AI Settings UI with provider dropdown (DeepSeek, LM Studio, Ollama, OpenAI-compatible)
+- Environment variable detection (`OPENJOURNAL_DEEPSEEK_API_KEY`, `DEEPSEEK_API_KEY`)
+- Masked API key display in UI (sk-••••••••abcd)
+- External provider privacy warning modal with explicit consent
+- Summary cards for each 3-hour block with status (disabled/pending/completed/failed)
+- Manual controls: generate, regenerate, delete per block
+- Provider badges (Local / External) and status indicators
+- `get_environment_provider_status` and `get_masked_api_key` Tauri commands
+- Toggle switch for enabling/disabling AI
+- Provider presets with automatic URL/model population
+- Empty states for all AI configurations
+
+### Changed
+
+- Frontend `APP_VERSION` bumped to 0.2.1
+- `AiConfig` defaults changed to DeepSeek provider
+- Backend `create_provider` now supports `deepseek` provider type
+- Removed unused `SummaryBlock` type from frontend
+- Separated summary display from placeholder generation
+
 ## [0.2.0] - Unreleased
 
 ### Added

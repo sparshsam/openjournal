@@ -210,6 +210,28 @@ OpenJournal v0.2 introduces optional AI-powered 3-hour summaries. AI is **disabl
 5. Click **Test Connection** to verify
 6. Click **Generate Summary** on any 3-hour block
 
+### DeepSeek Setup (Default)
+
+OpenJournal ships with DeepSeek as the default AI provider. To use it:
+
+1. Get an API key from [platform.deepseek.com](https://platform.deepseek.com/)
+2. Set it as an environment variable:
+
+```bash
+# PowerShell
+$env:OPENJOURNAL_DEEPSEEK_API_KEY = "sk-your-key-here"
+
+# CMD
+set OPENJOURNAL_DEEPSEEK_API_KEY=sk-your-key-here
+```
+
+Or use the standard `DEEPSEEK_API_KEY` variable.
+
+3. Restart OpenJournal
+4. Go to **AI Settings** and enable AI
+5. The "Using env:" indicator should show a masked key
+6. Click **Test Connection** to verify
+
 ### Provider Endpoints
 
 | Provider | Default URL | API Format |

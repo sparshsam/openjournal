@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiConfig {
     pub enabled: bool,
-    pub provider: String,         // "lm_studio", "ollama", "openai_compatible"
+    pub provider: String,
     pub base_url: String,
     pub api_key: String,
     pub model: String,
@@ -18,10 +18,10 @@ impl Default for AiConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            provider: "lm_studio".to_string(),
-            base_url: "http://localhost:1234/v1".to_string(),
+            provider: "deepseek".to_string(),
+            base_url: "https://api.deepseek.com/v1".to_string(),
             api_key: String::new(),
-            model: String::new(),
+            model: "deepseek-chat".to_string(),
         }
     }
 }
@@ -309,7 +309,7 @@ pub fn create_provider(config: &AiConfig) -> anyhow::Result<Box<dyn SummaryProvi
     match config.provider.as_str() {
         "lm_studio" => Ok(Box::new(LmStudioProvider::new(config.clone()))),
         "ollama" => Ok(Box::new(OllamaProvider::new(config.clone()))),
-        "openai_compatible" => Ok(Box::new(OpenAiCompatibleProvider::new(config.clone()))),
+        "deepseek" | "openai_compatible" => Ok(Box::new(OpenAiCompatibleProvider::new(config.clone()))),
         other => Err(anyhow!("Unknown provider: {other}")),
     }
 }
