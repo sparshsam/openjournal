@@ -28,6 +28,23 @@ OpenJournal should never implement:
 - Cloud sync in v0.1.
 - External AI data sharing without explicit user configuration.
 
+## API Key Security (v0.2.2+)
+
+API keys are managed with the following priority and storage rules:
+
+1. **Environment variables** — `OPENJOURNAL_DEEPSEEK_API_KEY` (highest priority) or `DEEPSEEK_API_KEY`
+2. **OS credential manager** — Windows Credential Manager, macOS Keychain, Linux Secret Service
+3. **Session override** — in-memory only, lost on app restart
+
+Rules:
+- API keys are **never** stored in the OpenJournal SQLite database.
+- API keys are **never** included in exports (Markdown/JSON).
+- API keys are **never** sent to the frontend in plaintext.
+- API keys are **never** logged.
+- The UI shows only a masked representation (`sk-••••••••abcd`).
+- Manual key entry is saved to the OS credential manager, not to SQLite.
+- Existing plaintext keys from earlier versions are migrated to secure storage on first launch.
+
 ## Dependency Hygiene
 
 - Keep Tauri, Rust crates, and npm packages current.

@@ -5,7 +5,7 @@ All notable changes to OpenJournal will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.2] - Unreleased
+## [0.2.2] - 2026-06-15
 
 ### Added
 
@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `save_credential_api_key`, `delete_credential_api_key`, `get_api_key_status` Tauri commands
 - Plaintext API key migration on startup (detect → move to credential store → delete)
 - Masked API key display (`sk-••••••••abcd`) never exposing full keys
+- SECURITY.md note on API key protection
 
 ### Changed
 
@@ -24,10 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AI Settings UI replaced API key input with source badge + save/remove/session-override actions
 - Added `ai-note` explaining keys are never stored in the database
 - Added key source CSS badges (env green, credential purple, session amber, missing red)
+- Version bumped to 0.2.2 across all files
+- `.gitignore` updated with release artifact patterns (`*.exe.sha256`, `*.exe`, `*.msi`)
+- Cleaned tracked `OpenJournal_0.1.3_x64-setup.exe.sha256` from git
+- Added `#[allow(dead_code)]` with doc comments on 4 reserved functions
 
 ### Fixed
 
-- Plaintext API keys from v0.2.0 are migrated to secure storage on first launch
+- Plaintext API keys from earlier versions are migrated to secure storage on first launch
 - Tests now save/restore environment variables to avoid cross-test contamination
 
 ## [0.2.1] - Unreleased

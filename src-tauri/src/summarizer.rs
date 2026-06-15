@@ -123,11 +123,9 @@ fn summarize_placeholder(block: &BlockActivity) -> SummaryBlock {
             main_focus: "No activity logged".to_string(),
             apps_projects: Vec::new(),
             context_switches: 0,
-            productivity_notes: vec![
-                "No local summary was generated for this block.".to_string(),
-            ],
-            plain_english_summary: "OpenJournal did not record focused window activity during this period."
-                .to_string(),
+            productivity_notes: vec!["No local summary was generated for this block.".to_string()],
+            plain_english_summary:
+                "OpenJournal did not record focused window activity during this period.".to_string(),
             provider: "placeholder".to_string(),
         };
     }
@@ -170,6 +168,8 @@ fn summarize_placeholder(block: &BlockActivity) -> SummaryBlock {
 
 /// Generate a summary for one block using the configured provider.
 /// Returns None if AI is disabled.
+/// Reserved for future async/background batch generation.
+#[allow(dead_code)]
 pub async fn generate_ai_summary(
     config: &AiConfig,
     block: &BlockActivity,
@@ -184,6 +184,8 @@ pub async fn generate_ai_summary(
 
 /// Generate AI summaries for all blocks that have activity.
 /// Returns (completed, failed) counts.
+/// Reserved for future background batch generation.
+#[allow(dead_code)]
 pub async fn generate_all_block_summaries(
     config: &AiConfig,
     blocks: &[BlockActivity],

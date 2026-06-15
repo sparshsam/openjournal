@@ -140,7 +140,10 @@ fn set_ai_config(config: AiConfig, state: State<'_, AppState>) -> Result<(), Str
     // Strip key before saving to SQLite
     let mut safe = config.clone();
     safe.api_key = String::new();
-    state.storage.set_ai_config(&safe).map_err(|e| e.to_string())
+    state
+        .storage
+        .set_ai_config(&safe)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -168,7 +171,10 @@ async fn generate_ai_summary(
     // Resolve API key from env → credential store → session (from config.api_key)
     let (resolved_key, source) = credential::resolve_api_key(&config.api_key);
     if resolved_key.is_empty() {
-        return Err("No API key found. Set OPENJOURNAL_DEEPSEEK_API_KEY or save a key in AI Settings.".to_string());
+        return Err(
+            "No API key found. Set OPENJOURNAL_DEEPSEEK_API_KEY or save a key in AI Settings."
+                .to_string(),
+        );
     }
     config.api_key = resolved_key;
     let _ = source; // used for logging if needed

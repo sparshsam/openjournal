@@ -4,10 +4,10 @@ use std::sync::{Arc, Mutex};
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use rusqlite::{params, Connection};
 
+use crate::credential::{self, CredentialKey};
 use crate::models::ActivityEntry;
 use crate::models::AiSummary;
 use crate::provider::AiConfig;
-use crate::credential::{self, CredentialKey};
 
 #[derive(Clone)]
 pub struct Storage {
@@ -251,9 +251,7 @@ impl Storage {
     pub fn get_ai_config(&self) -> anyhow::Result<AiConfig> {
         let connection = self.connection.lock().expect("storage lock failed");
         let mut stmt = connection.prepare("SELECT value FROM ai_config WHERE key = ?1")?;
-        let json_str: Option<String> = stmt
-            .query_row(params!["config"], |row| row.get(0))
-            .ok();
+        let json_str: Option<String> = stmt.query_row(params!["config"], |row| row.get(0)).ok();
         drop(stmt);
         match json_str {
             Some(json) => Ok(serde_json::from_str(&json)?),
@@ -382,6 +380,8 @@ impl Storage {
         Ok(())
     }
 
+    /// Delete all AI summaries for a day. Reserved for future batch operations.
+    #[allow(dead_code)]
     pub fn delete_ai_summaries_for_day(&self, day: &str) -> anyhow::Result<()> {
         let connection = self.connection.lock().expect("storage lock failed");
         connection.execute("DELETE FROM ai_summaries WHERE day = ?1", params![day])?;

@@ -109,7 +109,10 @@ impl SummaryProvider for LmStudioProvider {
     }
 
     fn generate_summary(&self, prompt: &str) -> anyhow::Result<GeneratedSummary> {
-        let url = format!("{}/chat/completions", self.config.base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}/chat/completions",
+            self.config.base_url.trim_end_matches('/')
+        );
         let model = if self.config.model.is_empty() {
             "local-model"
         } else {
@@ -272,7 +275,10 @@ impl SummaryProvider for OpenAiCompatibleProvider {
     }
 
     fn generate_summary(&self, prompt: &str) -> anyhow::Result<GeneratedSummary> {
-        let url = format!("{}/chat/completions", self.config.base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}/chat/completions",
+            self.config.base_url.trim_end_matches('/')
+        );
         let model = if self.config.model.is_empty() {
             "gpt-4o-mini"
         } else {
@@ -309,7 +315,9 @@ pub fn create_provider(config: &AiConfig) -> anyhow::Result<Box<dyn SummaryProvi
     match config.provider.as_str() {
         "lm_studio" => Ok(Box::new(LmStudioProvider::new(config.clone()))),
         "ollama" => Ok(Box::new(OllamaProvider::new(config.clone()))),
-        "deepseek" | "openai_compatible" => Ok(Box::new(OpenAiCompatibleProvider::new(config.clone()))),
+        "deepseek" | "openai_compatible" => {
+            Ok(Box::new(OpenAiCompatibleProvider::new(config.clone())))
+        }
         other => Err(anyhow!("Unknown provider: {other}")),
     }
 }
@@ -334,16 +342,27 @@ fn parse_summary_response(content: &str, model: &str) -> anyhow::Result<Generate
     Ok(GeneratedSummary {
         block_start: val["block_start"].as_str().unwrap_or("").to_string(),
         block_end: val["block_end"].as_str().unwrap_or("").to_string(),
-        main_focus: val["main_focus"].as_str().unwrap_or("Work session").to_string(),
+        main_focus: val["main_focus"]
+            .as_str()
+            .unwrap_or("Work session")
+            .to_string(),
         apps_projects: val["apps_projects"]
             .as_array()
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
             .unwrap_or_default(),
         context_switches: val["context_switches"].as_u64().unwrap_or(0) as usize,
         total_focus_minutes: val["total_focus_minutes"].as_i64().unwrap_or(0),
         productivity_notes: val["productivity_notes"]
             .as_array()
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
             .unwrap_or_default(),
         plain_english_summary: val["plain_english_summary"]
             .as_str()

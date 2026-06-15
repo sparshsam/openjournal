@@ -16,6 +16,12 @@ dist-ssr
 *.local
 src-tauri/target
 
+# Release artifacts
+*.exe.sha256
+*.exe
+*.msi
+src-tauri/target/release/bundle/
+
 # Local SQLite databases (created at runtime in app data dir,
 # but also when running tests or exported near the source)
 *.sqlite

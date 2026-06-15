@@ -7,7 +7,6 @@
 ///
 /// Keys are never stored in OpenJournal's SQLite database.
 /// Priority order: env var → credential store → session override.
-
 use keyring::{Entry, Error as KeyringError};
 
 const SERVICE_NAME: &str = "OpenJournal";
@@ -15,6 +14,8 @@ const SERVICE_NAME: &str = "OpenJournal";
 /// Credential store key names for different providers.
 pub enum CredentialKey {
     DeepSeek,
+    #[allow(dead_code)]
+    /// Reserved for future OpenAI-compatible provider credential storage.
     OpenAiCompatible,
 }
 
@@ -104,8 +105,8 @@ pub fn mask_api_key(key: &str) -> String {
 /// Status information about the API key source for the frontend.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ApiKeyStatus {
-    pub source: String,          // "env" | "credential" | "session" | "missing"
-    pub masked_key: String,      // "sk-••••••••abcd" or empty
+    pub source: String,     // "env" | "credential" | "session" | "missing"
+    pub masked_key: String, // "sk-••••••••abcd" or empty
     pub has_env_var: bool,
     pub has_credential: bool,
 }
@@ -128,7 +129,12 @@ pub fn get_api_key_status(session_override: &str) -> ApiKeyStatus {
     let masked_key = mask_api_key(&resolved_key);
 
     ApiKeyStatus {
-        source: if resolved_key.is_empty() { "missing" } else { source }.to_string(),
+        source: if resolved_key.is_empty() {
+            "missing"
+        } else {
+            source
+        }
+        .to_string(),
         masked_key,
         has_env_var,
         has_credential,
@@ -146,8 +152,12 @@ mod tests {
         std::env::remove_var("OPENJOURNAL_DEEPSEEK_API_KEY");
         std::env::remove_var("DEEPSEEK_API_KEY");
         f();
-        if let Some(v) = oj { std::env::set_var("OPENJOURNAL_DEEPSEEK_API_KEY", v); }
-        if let Some(v) = ds { std::env::set_var("DEEPSEEK_API_KEY", v); }
+        if let Some(v) = oj {
+            std::env::set_var("OPENJOURNAL_DEEPSEEK_API_KEY", v);
+        }
+        if let Some(v) = ds {
+            std::env::set_var("DEEPSEEK_API_KEY", v);
+        }
     }
 
     #[test]

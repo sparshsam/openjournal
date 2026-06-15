@@ -41,14 +41,14 @@ pub struct ExportBundle {
 pub struct AiSummary {
     pub id: i64,
     pub day: String,
-    pub block_index: i32,         // 0-7 (8 x 3-hour blocks)
+    pub block_index: i32, // 0-7 (8 x 3-hour blocks)
     pub block_start: String,
     pub block_end: String,
-    pub summary_json: String,     // full JSON payload from provider
+    pub summary_json: String, // full JSON payload from provider
     pub model_name: String,
     pub generated_at: String,
     pub token_count: Option<i64>,
-    pub status: String,           // pending | completed | failed
+    pub status: String, // pending | completed | failed
     pub error_message: Option<String>,
 }
 
@@ -60,6 +60,6 @@ pub struct BlockActivity {
     pub entries: Vec<ActivityEntry>,
     pub total_focus_seconds: i64,
     pub context_switches: usize,
-    pub app_breakdown: Vec<(String, i64)>,  // (app_name, total_seconds)
+    pub app_breakdown: Vec<(String, i64)>, // (app_name, total_seconds)
     pub idle_minutes: i64,
 }
