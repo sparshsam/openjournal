@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "OpenJournal",
+  "version": "0.1.0",
+  "identifier": "dev.openjournal.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "OpenJournal",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 1040,
+        "minHeight": 680
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "OpenJournal",
+    "category": "Productivity",
+    "shortDescription": "Privacy-first local activity journal",
+    "longDescription": "OpenJournal logs focused window activity locally and generates optional local AI summaries.",
+    "copyright": "Copyright OpenJournal contributors",
+    "license": "AGPL-3.0-or-later",
+    "windows": {
+      "nsis": {
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}
