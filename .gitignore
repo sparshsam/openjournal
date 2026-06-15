@@ -7,12 +7,27 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+
+# Build output
 dist
 dist-ssr
 *.local
 src-tauri/target
+
+# Local SQLite databases (created at runtime in app data dir,
+# but also when running tests or exported near the source)
+*.sqlite
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.db
+
+# Generated exports
 exports
+
+# Working directories
 work
 
 # Editor directories and files

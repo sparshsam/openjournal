@@ -20,6 +20,11 @@ struct AppState {
 }
 
 #[tauri::command]
+fn get_version() -> Result<String, String> {
+    Ok(env!("CARGO_PKG_VERSION").to_string())
+}
+
+#[tauri::command]
 fn get_status(state: State<'_, AppState>) -> Result<AppStatus, String> {
     let tracker = state.tracker.lock().map_err(|_| "tracker lock failed")?;
     Ok(AppStatus {
@@ -162,6 +167,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            get_version,
             get_status,
             set_logging_paused,
             get_day_activity,

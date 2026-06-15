@@ -29,8 +29,6 @@ This repository is a v0.1 scaffold with the core architecture implemented:
 - Placeholder summarization module for v0.2 local model support.
 - Documentation for privacy, security, roadmap, and installer planning.
 
-The React UI builds in this environment. Rust is not installed in this workspace, so the Tauri shell was scaffolded but not compiled here.
-
 ## Requirements
 
 - Windows 10 or Windows 11.
@@ -74,6 +72,31 @@ Summary fields:
 - Context switches.
 - Productivity notes.
 - Plain-English summary.
+
+## Verification Checklist (v0.1.1)
+
+Run through this checklist after building to confirm the app works correctly:
+
+| # | Check | Expected |
+|---|-------|----------|
+| 1 | `npm install` | All dependencies installed, 0 vulnerabilities |
+| 2 | `npm run build` | Frontend builds to `dist/` without errors |
+| 3 | `cargo fmt -- --check` | Rust formatting passes |
+| 4 | `cargo test` (or per-module extracted tests) | All unit tests pass |
+| 5 | App launches | Window opens at 1280x820, title "OpenJournal" |
+| 6 | First-run privacy modal | Modal appears on first launch, "I understand" dismisses it, `localStorage` flag persisted |
+| 7 | About panel | Clicking "About OpenJournal" in the sidebar shows version, database path, data model, and privacy info |
+| 8 | System tray | Tray icon appears with "Show OpenJournal", "Pause/Resume logging", "Quit" |
+| 9 | Left-click tray icon | Shows the window |
+| 10 | Pause logging | Pause button stops logging; tray "Pause/Resume logging" toggles correctly |
+| 11 | Resume logging | Resume continues logging; status badge shows "Logging active" |
+| 12 | Blocklist add | Adding `testblock` to blocklist and saving persists it |
+| 13 | Blocklist remove | Removing an entry and saving removes it from storage |
+| 14 | Markdown export | Export generates `exports/openjournal-YYYY-MM-DD.md` with timeline table |
+| 15 | JSON export | Export generates `exports/openjournal-YYYY-MM-DD.json` with activity and summary data |
+| 16 | Delete day | Confirmation dialog appears; deleting removes all entries for the current day |
+| 17 | Database path | Shown in the About panel footer at the actual Tauri app data directory |
+| 18 | App version | v0.1.1 displayed in the About panel |
 
 ## License
 

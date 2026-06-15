@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity,
@@ -7,12 +7,17 @@ import {
   CalendarDays,
   Clock3,
   Download,
+  ExternalLink,
+  Info,
   Pause,
   Play,
   ShieldCheck,
   Trash2,
+  X,
 } from 'lucide-react';
 import './style.css';
+
+const APP_VERSION = '0.1.1';
 
 type ActivityEntry = {
   id: number;
@@ -116,6 +121,90 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function PrivacyModal({ onDismiss }: { onDismiss: () => void }) {
+  const backdropRef = useRef<HTMLDivElement>(null);
+
+  const handleOutsideClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target === backdropRef.current) onDismiss();
+    },
+    [onDismiss],
+  );
+
+  return (
+    <div className="modal-backdrop" ref={backdropRef} onClick={handleOutsideClick} role="dialog" aria-modal="true" aria-label="Privacy notice">
+      <div className="modal-card">
+        <button className="modal-close" onClick={onDismiss} type="button" aria-label="Close privacy notice">
+          <X size={20} />
+        </button>
+        <div className="modal-header">
+          <ShieldCheck size={28} />
+          <h2>Welcome to OpenJournal</h2>
+        </div>
+        <div className="modal-body">
+          <p>OpenJournal logs focused window activity <strong>entirely on your device.</strong></p>
+          <ul>
+            <li>No keylogging — never records typed keys or passwords.</li>
+            <li>No clipboard capture — never reads your clipboard.</li>
+            <li>No screenshots, screen recording, or screen capture.</li>
+            <li>No cloud sync — all data stays in a local SQLite database.</li>
+            <li>No external AI calls in v0.1 — summaries are placeholder templates.</li>
+            <li>Private apps and domains can be blocklisted before anything is stored.</li>
+            <li>Logging can be paused at any time from the app or system tray.</li>
+          </ul>
+          <p>OpenJournal only records:</p>
+          <ul>
+            <li>The name of the focused application (e.g., "Code.exe")</li>
+            <li>The title of the focused window</li>
+            <li>When focus started and ended</li>
+          </ul>
+        </div>
+        <div className="modal-footer">
+          <button className="primary-button full" onClick={onDismiss} type="button">
+            I understand — start using OpenJournal
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AboutPanel({ version, dbPath }: { version: string; dbPath: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <section className={`about-panel ${expanded ? 'expanded' : ''}`}>
+      <button className="about-toggle" onClick={() => setExpanded((v) => !v)} type="button" aria-label="Toggle about panel">
+        <Info size={16} />
+        <span>About OpenJournal</span>
+        <span className="about-version">{version}</span>
+      </button>
+      {expanded && (
+        <div className="about-details">
+          <div className="about-row">
+            <span className="about-label">Version</span>
+            <span className="about-value">{version}</span>
+          </div>
+          <div className="about-row">
+            <span className="about-label">Database</span>
+            <span className="about-value about-path" title={dbPath}>
+              <ExternalLink size={12} />
+              {dbPath}
+            </span>
+          </div>
+          <div className="about-row">
+            <span className="about-label">Data model</span>
+            <span className="about-value">SQLite (local only)</span>
+          </div>
+          <div className="about-row">
+            <span className="about-label">Privacy</span>
+            <span className="about-value">All data stays on-device</span>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function App() {
   const [status, setStatus] = useState<AppStatus>({
     logging_paused: false,
@@ -126,6 +215,14 @@ function App() {
   const [summaries, setSummaries] = useState<SummaryBlock[]>(sampleSummaries);
   const [blocklistText, setBlocklistText] = useState('1Password\nBitwarden\nbankofamerica.com\nchase.com');
   const [notice, setNotice] = useState('Ready');
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+
+  useEffect(() => {
+    const dismissed = localStorage.getItem('openjournal_privacy_dismissed');
+    if (!dismissed) {
+      setShowPrivacyModal(true);
+    }
+  }, []);
 
   const day = todayIso();
   const totalSeconds = useMemo(
@@ -154,6 +251,11 @@ function App() {
     refresh();
     const timer = window.setInterval(refresh, 15_000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  const handleDismissPrivacy = useCallback(() => {
+    localStorage.setItem('openjournal_privacy_dismissed', 'true');
+    setShowPrivacyModal(false);
   }, []);
 
   async function toggleLogging() {
@@ -202,173 +304,182 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">OJ</div>
-          <div>
-            <strong>OpenJournal</strong>
-            <span>Local activity journal</span>
-          </div>
-        </div>
-
-        <nav className="nav-list" aria-label="Primary">
-          <a className="nav-item active" href="#today">
-            <CalendarDays size={18} /> Today
-          </a>
-          <a className="nav-item" href="#privacy">
-            <ShieldCheck size={18} /> Privacy
-          </a>
-          <a className="nav-item" href="#blocklist">
-            <Ban size={18} /> Blocklist
-          </a>
-          <a className="nav-item" href="#summaries">
-            <Brain size={18} /> 3-hour summaries
-          </a>
-        </nav>
-
-        <section className="privacy-box" id="privacy">
-          <ShieldCheck size={20} />
-          <h2>Privacy</h2>
-          <p>
-            Everything stays on this device. OpenJournal records app names, window titles, and focus
-            durations only. It never keylogs, reads typed text, captures clipboard data, records your
-            screen, or syncs to the cloud.
-          </p>
-        </section>
-      </aside>
-
-      <section className="content" id="today">
-        <header className="topbar">
-          <div>
-            <h1>Today</h1>
-            <p>{new Intl.DateTimeFormat([], { dateStyle: 'full' }).format(new Date())}</p>
-          </div>
-          <div className="topbar-actions">
-            <span className={status.logging_paused ? 'status paused' : 'status'}>
-              <Activity size={16} />
-              {status.logging_paused ? 'Logging paused' : 'Logging active'}
-            </span>
-            <button className="primary-button" onClick={toggleLogging} type="button">
-              {status.logging_paused ? <Play size={18} /> : <Pause size={18} />}
-              {status.logging_paused ? 'Resume logging' : 'Pause logging'}
-            </button>
-          </div>
-        </header>
-
-        <section className="stats-grid" aria-label="Daily activity statistics">
-          <div className="stat">
-            <span>Tracked time</span>
-            <strong>{formatDuration(totalSeconds)}</strong>
-          </div>
-          <div className="stat">
-            <span>Apps used</span>
-            <strong>{appCount}</strong>
-          </div>
-          <div className="stat">
-            <span>Focused windows</span>
-            <strong>{activities.length}</strong>
-          </div>
-          <div className="stat">
-            <span>Storage</span>
-            <strong>SQLite</strong>
-          </div>
-        </section>
-
-        <section className="timeline-panel">
-          <div className="panel-heading">
+    <>
+      {showPrivacyModal && <PrivacyModal onDismiss={handleDismissPrivacy} />}
+      <main className="app-shell">
+        <aside className="sidebar">
+          <div className="brand">
+            <div className="brand-mark">OJ</div>
             <div>
-              <h2>Daily timeline</h2>
-              <p>Focused windows are merged into duration records.</p>
-            </div>
-            <div className="button-row">
-              <button onClick={() => exportDay('markdown')} type="button">
-                <Download size={16} /> Export Markdown
-              </button>
-              <button onClick={() => exportDay('json')} type="button">
-                <Download size={16} /> Export JSON
-              </button>
-              <button className="danger-button" onClick={deleteDay} type="button">
-                <Trash2 size={16} /> Delete day
-              </button>
+              <strong>OpenJournal</strong>
+              <span>Local activity journal</span>
             </div>
           </div>
 
-          <div className="timeline">
-            {activities.length === 0 ? (
-              <p className="empty-state">No activity has been logged for this day.</p>
-            ) : (
-              activities.map((entry) => (
-                <article className="timeline-row" key={entry.id}>
-                  <div className="time-cell">
-                    <Clock3 size={16} />
-                    <span>
-                      {formatTime(entry.started_at)} - {formatTime(entry.ended_at)}
-                    </span>
-                  </div>
-                  <div className="row-main">
-                    <strong>{entry.app_name}</strong>
-                    <span>{entry.window_title || 'Untitled window'}</span>
-                  </div>
-                  <div className="duration">{formatDuration(entry.duration_seconds)}</div>
-                </article>
-              ))
-            )}
-          </div>
-        </section>
-      </section>
+          <nav className="nav-list" aria-label="Primary">
+            <a className="nav-item active" href="#today">
+              <CalendarDays size={18} /> Today
+            </a>
+            <a className="nav-item" href="#privacy">
+              <ShieldCheck size={18} /> Privacy
+            </a>
+            <a className="nav-item" href="#blocklist">
+              <Ban size={18} /> Blocklist
+            </a>
+            <a className="nav-item" href="#summaries">
+              <Brain size={18} /> 3-hour summaries
+            </a>
+          </nav>
 
-      <aside className="right-rail">
-        <section className="summary-panel" id="summaries">
-          <div className="panel-heading compact">
-            <h2>3-hour summaries</h2>
-            <span>v0.2-ready</span>
-          </div>
-          {summaries.map((summary) => (
-            <article className="summary-block" key={`${summary.block_start}-${summary.block_end}`}>
-              <div className="summary-time">
-                {summary.block_start} - {summary.block_end}
+          <section className="privacy-box" id="privacy">
+            <ShieldCheck size={20} />
+            <h2>Privacy</h2>
+            <p>
+              Everything stays on this device. OpenJournal records app names, window titles, and focus
+              durations only. It never keylogs, reads typed text, captures clipboard data, records your
+              screen, or syncs to the cloud.
+            </p>
+            <button className="text-button" onClick={() => setShowPrivacyModal(true)} type="button">
+              View full privacy notice
+            </button>
+          </section>
+
+          <AboutPanel version={APP_VERSION} dbPath={status.db_path} />
+        </aside>
+
+        <section className="content" id="today">
+          <header className="topbar">
+            <div>
+              <h1>Today</h1>
+              <p>{new Intl.DateTimeFormat([], { dateStyle: 'full' }).format(new Date())}</p>
+            </div>
+            <div className="topbar-actions">
+              <span className={status.logging_paused ? 'status paused' : 'status'}>
+                <Activity size={16} />
+                {status.logging_paused ? 'Logging paused' : 'Logging active'}
+                {canUseTauri && <span className="status-window" title={status.active_window}>{status.active_window}</span>}
+              </span>
+              <button className="primary-button" onClick={toggleLogging} type="button">
+                {status.logging_paused ? <Play size={18} /> : <Pause size={18} />}
+                {status.logging_paused ? 'Resume logging' : 'Pause logging'}
+              </button>
+            </div>
+          </header>
+
+          <section className="stats-grid" aria-label="Daily activity statistics">
+            <div className="stat">
+              <span>Tracked time</span>
+              <strong>{formatDuration(totalSeconds)}</strong>
+            </div>
+            <div className="stat">
+              <span>Apps used</span>
+              <strong>{appCount}</strong>
+            </div>
+            <div className="stat">
+              <span>Focused windows</span>
+              <strong>{activities.length}</strong>
+            </div>
+            <div className="stat">
+              <span>Storage</span>
+              <strong>SQLite</strong>
+            </div>
+          </section>
+
+          <section className="timeline-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Daily timeline</h2>
+                <p>Focused windows are merged into duration records.</p>
               </div>
-              <h3>{summary.main_focus}</h3>
-              <p>{summary.plain_english_summary}</p>
-              <dl>
-                <div>
-                  <dt>Apps/projects used</dt>
-                  <dd>{summary.apps_projects.length ? summary.apps_projects.join(', ') : 'None yet'}</dd>
-                </div>
-                <div>
-                  <dt>Context switches</dt>
-                  <dd>{summary.context_switches}</dd>
-                </div>
-                <div>
-                  <dt>Provider</dt>
-                  <dd>{summary.provider}</dd>
-                </div>
-              </dl>
-            </article>
-          ))}
+              <div className="button-row">
+                <button onClick={() => exportDay('markdown')} type="button">
+                  <Download size={16} /> Export Markdown
+                </button>
+                <button onClick={() => exportDay('json')} type="button">
+                  <Download size={16} /> Export JSON
+                </button>
+                <button className="danger-button" onClick={deleteDay} type="button">
+                  <Trash2 size={16} /> Delete day
+                </button>
+              </div>
+            </div>
+
+            <div className="timeline">
+              {activities.length === 0 ? (
+                <p className="empty-state">No activity has been logged for this day.</p>
+              ) : (
+                activities.map((entry) => (
+                  <article className="timeline-row" key={entry.id}>
+                    <div className="time-cell">
+                      <Clock3 size={16} />
+                      <span>
+                        {formatTime(entry.started_at)} - {formatTime(entry.ended_at)}
+                      </span>
+                    </div>
+                    <div className="row-main">
+                      <strong>{entry.app_name}</strong>
+                      <span>{entry.window_title || 'Untitled window'}</span>
+                    </div>
+                    <div className="duration">{formatDuration(entry.duration_seconds)}</div>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
         </section>
 
-        <section className="blocklist-panel" id="blocklist">
-          <h2>Blocklist</h2>
-          <p>Skip private apps, domains, or title fragments before anything is stored.</p>
-          <textarea
-            aria-label="Private app and domain blocklist"
-            value={blocklistText}
-            onChange={(event) => setBlocklistText(event.target.value)}
-          />
-          <button className="primary-button full" onClick={saveBlocklist} type="button">
-            Save blocklist
-          </button>
-        </section>
+        <aside className="right-rail">
+          <section className="summary-panel" id="summaries">
+            <div className="panel-heading compact">
+              <h2>3-hour summaries</h2>
+              <span>v0.2-ready</span>
+            </div>
+            {summaries.map((summary) => (
+              <article className="summary-block" key={`${summary.block_start}-${summary.block_end}`}>
+                <div className="summary-time">
+                  {summary.block_start} - {summary.block_end}
+                </div>
+                <h3>{summary.main_focus}</h3>
+                <p>{summary.plain_english_summary}</p>
+                <dl>
+                  <div>
+                    <dt>Apps/projects used</dt>
+                    <dd>{summary.apps_projects.length ? summary.apps_projects.join(', ') : 'None yet'}</dd>
+                  </div>
+                  <div>
+                    <dt>Context switches</dt>
+                    <dd>{summary.context_switches}</dd>
+                  </div>
+                  <div>
+                    <dt>Provider</dt>
+                    <dd>{summary.provider}</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </section>
 
-        <footer className="local-note">
-          <strong>Local database</strong>
-          <span>{status.db_path}</span>
-          <small>{notice}</small>
-        </footer>
-      </aside>
-    </main>
+          <section className="blocklist-panel" id="blocklist">
+            <h2>Blocklist</h2>
+            <p>Skip private apps, domains, or title fragments before anything is stored.</p>
+            <textarea
+              aria-label="Private app and domain blocklist"
+              value={blocklistText}
+              onChange={(event) => setBlocklistText(event.target.value)}
+            />
+            <button className="primary-button full" onClick={saveBlocklist} type="button">
+              Save blocklist
+            </button>
+          </section>
+
+          <footer className="local-note">
+            <strong>Local database</strong>
+            <span>{status.db_path}</span>
+            <small>{notice}</small>
+          </footer>
+        </aside>
+      </main>
+    </>
   );
 }
 
