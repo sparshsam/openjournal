@@ -110,4 +110,30 @@ pub struct DayStats {
     pub storage_backend: String,
     pub last_activity_write_at: String,
     pub active_entry_duration_seconds: i64,
+    pub total_tracked_days: i64,
+    pub export_count: i64,
+    pub uptime_seconds: i64,
+    pub db_size_bytes: i64,
+    pub exe_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupInfo {
+    pub path: String,
+    pub size_bytes: i64,
+    pub checksum: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticsExtras {
+    pub db_size_bytes: i64,
+    pub total_tracked_days: i64,
+    pub export_count: i64,
+    pub last_ai_summary_at: String,
+    pub last_ai_failure_at: String,
+    pub ai_provider_configured: bool,
+    pub updater_enabled: bool,
+    pub latest_version: String,
+    pub uptime_seconds: i64,
+    pub exe_path: String,
 }

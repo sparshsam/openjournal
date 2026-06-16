@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import './style.css';
 
-const APP_VERSION = '0.3.5';
+const APP_VERSION = '0.3.6';
 
 // ── Types ──
 type ActivityEntry = {
@@ -65,7 +65,6 @@ function App() {
   const [dayStats, setDayStats] = useState<DayStats | null>(null);
   const [activities, setActivities] = useState<ActivityEntry[]>([]);
   const [notice, setNotice] = useState('');
-  const [diagRefreshing] = useState(false);
 
   // AI state
   const [aiConfig, setAiConfig] = useState<AiConfig>({ enabled: false, provider: 'deepseek', base_url: 'https://api.deepseek.com/v1', api_key: '', model: 'deepseek-chat' });
@@ -537,7 +536,7 @@ function App() {
                 </div>
               ))}
               <div className="diag-actions">
-                <button className="text-button small" onClick={refreshState} disabled={diagRefreshing}><RefreshCw size={12} /> Refresh</button>
+                <button className="text-button small" onClick={refreshState}><RefreshCw size={12} /> Refresh</button>
                 <button className="text-button small" onClick={() => openFolder('open_data_folder', 'Data')}><FolderOpen size={12} /> Data</button>
                 <button className="text-button small" onClick={() => openFolder('open_exports_folder', 'Exports')}><Download size={12} /> Exports</button>
                 <button className="text-button small" onClick={() => openFolder('open_logs_folder', 'Logs')}><Info size={12} /> Logs</button>
