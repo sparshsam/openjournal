@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import './style.css';
 
-const APP_VERSION = '0.3.7';
+const APP_VERSION = '0.3.8';
 
 // ── Types ──
 type ActivityEntry = {

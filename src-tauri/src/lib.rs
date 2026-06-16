@@ -1,7 +1,9 @@
 mod activity_tracker;
+mod backup;
 mod credential;
 mod export;
 mod models;
+mod paths;
 mod provider;
 mod scheduler;
 mod storage;
@@ -447,30 +449,29 @@ fn open_logs_folder() -> Result<String, String> {
     Ok(dir.display().to_string())
 }
 
-/// Create a timestamped backup of the SQLite database.
+/// Create an encrypted timestamped backup of the SQLite database.
 #[tauri::command]
-fn export_backup(state: State<'_, AppState>) -> Result<BackupResult, String> {
-    let backup_dir = backups_dir().map_err(|e| e.to_string())?;
+fn export_backup(passphrase: String, state: State<'_, AppState>) -> Result<BackupResult, String> {
+    let backup_dir = paths::backups_dir().map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().format("%Y%m%d-%H%M%S");
     let backup_path = backup_dir.join(format!("openjournal-{}.ojbackup", now));
-    let src = state.storage.db_path();
-    std::fs::copy(src, &backup_path).map_err(|e| format!("backup failed: {e}"))?;
-    let size = std::fs::metadata(&backup_path).map(|m| m.len() as i64).unwrap_or(0);
-    let checksum = sha256_hex(&backup_path);
+    let src = state.storage.db_path().to_path_buf();
+    
+    let (size, checksum) = backup::export_encrypted_backup(&src, &backup_path, &passphrase)
+        .map_err(|e| format!("backup failed: {e}"))?;
+    
     Ok(BackupResult { path: backup_path.display().to_string(), size_bytes: size, checksum })
 }
 
-/// Restore a backup from a .ojbackup file.
+/// Restore a backup from an encrypted .ojbackup file.
 #[tauri::command]
-fn restore_backup(path: String, state: State<'_, AppState>) -> Result<String, String> {
-    let src = std::path::Path::new(&path);
-    if !src.exists() { return Err("Backup file not found".to_string()); }
-    let dst = state.storage.db_path().to_path_buf();
-    let now = chrono::Utc::now().format("%Y%m%d-%H%M%S");
-    let pre = dst.parent().unwrap().join(format!("pre-restore-{}.sqlite3", now));
-    let _ = std::fs::copy(&dst, &pre);
-    std::fs::copy(src, &dst).map_err(|e| format!("restore failed: {e}"))?;
-    Ok(format!("Restored. Previous DB at {:?}", pre))
+fn restore_backup(path: String, passphrase: String, state: State<'_, AppState>) -> Result<String, String> {
+    let backup_path = std::path::Path::new(&path);
+    if !backup_path.exists() { return Err("Backup file not found".to_string()); }
+    let db_path = state.storage.db_path().to_path_buf();
+    
+    backup::decrypt_and_restore(backup_path, &db_path, &passphrase)
+        .map_err(|e| format!("restore failed: {e}"))
 }
 
 /// Open the backups folder.
