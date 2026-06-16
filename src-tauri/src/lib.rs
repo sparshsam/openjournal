@@ -22,7 +22,7 @@ use storage::Storage;
 use summarizer::{aggregate_blocks, build_summary_prompt};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, State};
+use tauri::{Manager, State};
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct EnvProviderStatus {
@@ -47,10 +47,14 @@ fn get_status(state: State<'_, AppState>) -> Result<AppStatus, String> {
     let autostart = state.storage.get_autostart_setting();
     let in_tauri =
         cfg!(target_os = "windows") || cfg!(target_os = "macos") || cfg!(target_os = "linux");
+    let db_path = state.storage.db_path().display().to_string();
+    let data_path = app_data_dir().unwrap_or_else(|_| PathBuf::from(&db_path));
+    let export_path = exports_dir().unwrap_or_else(|_| PathBuf::from("N/A"));
+    let log_path = logs_dir().unwrap_or_else(|_| PathBuf::from("N/A"));
     Ok(AppStatus {
         logging_paused: tracker.is_paused(),
         active_window: tracker.active_window_label(),
-        db_path: state.storage.db_path().display().to_string(),
+        db_path,
         app_mode: if in_tauri && option_env!("TAURI_ENV_DEBUG").is_none() {
             "Installed".to_string()
         } else if std::env::var("__TAURI__").is_ok() {
@@ -62,6 +66,11 @@ fn get_status(state: State<'_, AppState>) -> Result<AppStatus, String> {
         autostart_enabled: autostart.enabled,
         last_write_at: state.storage.get_last_recovery_at(),
         last_recovery_at: state.storage.get_last_recovery_at(),
+        data_path: data_path.display().to_string(),
+        exports_path: export_path.display().to_string(),
+        logs_path: log_path.display().to_string(),
+        tray_active: true,
+        storage_backend: "SQLite (WAL)".to_string(),
     })
 }
 
@@ -80,6 +89,11 @@ fn set_logging_paused(paused: bool, state: State<'_, AppState>) -> Result<AppSta
         autostart_enabled: false,
         last_write_at: String::new(),
         last_recovery_at: String::new(),
+        data_path: String::new(),
+        exports_path: String::new(),
+        logs_path: String::new(),
+        tray_active: true,
+        storage_backend: String::new(),
     })
 }
 
@@ -358,10 +372,63 @@ fn set_autostart_setting(
         .map_err(|e| e.to_string())
 }
 
-fn app_data_dir(app: &AppHandle) -> anyhow::Result<PathBuf> {
-    let dir = app.path().app_data_dir()?;
+/// Production data directory under %%LOCALAPPDATA%%/OpenJournal/Data/
+fn app_data_dir() -> anyhow::Result<PathBuf> {
+    let base = data_root_dir()?;
+    let dir = base.join("Data");
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
+}
+
+/// Production exports directory under %%LOCALAPPDATA%%/OpenJournal/Exports/
+fn exports_dir() -> anyhow::Result<PathBuf> {
+    let base = data_root_dir()?;
+    let dir = base.join("Exports");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+/// Production logs directory under %%LOCALAPPDATA%%/OpenJournal/Logs/
+fn logs_dir() -> anyhow::Result<PathBuf> {
+    let base = data_root_dir()?;
+    let dir = base.join("Logs");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+/// Root data directory: %%LOCALAPPDATA%%/OpenJournal/
+fn data_root_dir() -> anyhow::Result<PathBuf> {
+    let base = if cfg!(target_os = "windows") {
+        let local_app_data = std::env::var("LOCALAPPDATA")
+            .map_err(|_| anyhow::anyhow!("LOCALAPPDATA not set"))?;
+        PathBuf::from(local_app_data).join("OpenJournal")
+    } else {
+        dirs::data_dir().map(|d| d.join("OpenJournal"))
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine data directory"))?
+    };
+    std::fs::create_dir_all(&base)?;
+    Ok(base)
+}
+
+#[tauri::command]
+fn open_data_folder() -> Result<String, String> {
+    let dir = app_data_dir().map_err(|e| e.to_string())?;
+    let _ = open::that(&dir);
+    Ok(dir.display().to_string())
+}
+
+#[tauri::command]
+fn open_exports_folder() -> Result<String, String> {
+    let dir = exports_dir().map_err(|e| e.to_string())?;
+    let _ = open::that(&dir);
+    Ok(dir.display().to_string())
+}
+
+#[tauri::command]
+fn open_logs_folder() -> Result<String, String> {
+    let dir = logs_dir().map_err(|e| e.to_string())?;
+    let _ = open::that(&dir);
+    Ok(dir.display().to_string())
 }
 
 /// Enable or disable Windows autostart via HKCU registry Run key.
@@ -462,7 +529,7 @@ fn install_tray(
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            let data_dir = app_data_dir(app.handle())?;
+            let data_dir = app_data_dir()?;
             let storage = Storage::open(data_dir.join("openjournal.sqlite3"))?;
             storage.migrate()?;
             let _ = storage.migrate_plaintext_keys();
@@ -514,6 +581,9 @@ pub fn run() {
             set_logging_paused,
             get_day_activity,
             get_day_stats_cmd,
+            open_data_folder,
+            open_exports_folder,
+            open_logs_folder,
             get_summary_blocks,
             set_blocklist,
             export_day,

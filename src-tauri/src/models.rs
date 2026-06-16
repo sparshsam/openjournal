@@ -10,17 +10,7 @@ pub struct ActivityEntry {
     pub duration_seconds: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AppStatus {
-    pub logging_paused: bool,
-    pub active_window: String,
-    pub db_path: String,
-    pub app_mode: String,
-    pub tracker_running: bool,
-    pub autostart_enabled: bool,
-    pub last_write_at: String,
-    pub last_recovery_at: String,
-}
+// AppStatus now redefined below with diagnostics fields
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutostartSetting {
@@ -91,6 +81,23 @@ pub struct BlockActivity {
     pub context_switches: usize,
     pub app_breakdown: Vec<(String, i64)>,
     pub idle_minutes: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppStatus {
+    pub logging_paused: bool,
+    pub active_window: String,
+    pub db_path: String,
+    pub app_mode: String,
+    pub tracker_running: bool,
+    pub autostart_enabled: bool,
+    pub last_write_at: String,
+    pub last_recovery_at: String,
+    pub data_path: String,
+    pub exports_path: String,
+    pub logs_path: String,
+    pub tray_active: bool,
+    pub storage_backend: String,
 }
 
 /// Authoritative per-day stats computed from SQLite, not client state.

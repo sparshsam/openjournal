@@ -115,15 +115,15 @@ pub struct ApiKeyStatus {
 pub fn get_api_key_status(session_override: &str) -> ApiKeyStatus {
     let has_oj_env = std::env::var("OPENJOURNAL_DEEPSEEK_API_KEY")
         .ok()
-        .map_or(false, |v| !v.is_empty());
+        .is_some_and(|v| !v.is_empty());
     let has_ds_env = std::env::var("DEEPSEEK_API_KEY")
         .ok()
-        .map_or(false, |v| !v.is_empty());
+        .is_some_and(|v| !v.is_empty());
     let has_env_var = has_oj_env || has_ds_env;
     let has_credential = load_credential(&CredentialKey::DeepSeek)
         .ok()
         .flatten()
-        .map_or(false, |v| !v.is_empty());
+        .is_some_and(|v| !v.is_empty());
 
     let (resolved_key, source) = resolve_api_key(session_override);
     let masked_key = mask_api_key(&resolved_key);
