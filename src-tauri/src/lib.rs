@@ -473,8 +473,13 @@ pub fn run() {
             });
 
             // Close to tray: hide window instead of quitting
+            // In installed (release) mode, start hidden — tray-first UX
             if let Some(window) = app.get_webview_window("main") {
                 let window_clone = window.clone();
+                // Hide on launch for installed builds
+                if !cfg!(debug_assertions) {
+                    let _ = window.hide();
+                }
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                         let _ = window_clone.hide();

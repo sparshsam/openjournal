@@ -37,7 +37,7 @@ impl Scheduler {
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(Duration::from_secs(30)).await; // wait for app init
             let settings = scheduler.storage.get_scheduler_settings().ok();
-            if settings.map_or(false, |s| s.generate_on_startup) {
+            if settings.is_some_and(|s| s.generate_on_startup) {
                 let _ = scheduler.generate_missing_days(7).await;
             }
         });

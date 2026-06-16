@@ -486,18 +486,22 @@ impl Storage {
     // -----------------------------------------------------------------------
 
     /// Finalize any activity rows that were open when the app last shut down.
-    /// Handles both clean shutdown and crash recovery.
+    /// Uses last_seen_at as the authoritative recovery time — if the tracker
+    /// was polling, last_seen_at was written every 5 seconds. This prevents
+    /// one activity from incorrectly spanning the entire shutdown/offline period.
+    /// Falls back to current startup time only if last_seen_at is NULL.
     pub fn recover_open_entries(&self) -> anyhow::Result<i64> {
         let connection = self.connection.lock().expect("storage lock failed");
         let now_rfc = Utc::now().to_rfc3339();
-        // Update rows where ended_at == started_at (crashed before first refresh tick)
-        // or duration_seconds < 3 (crashed mid-tick)
+        // Recover rows where ended_at equals started_at (crashed before first touch)
+        // OR where ended_at matches started_at precision (touch never completed)
+        // Use last_seen_at as the recovery timestamp when available.
         let recovered = connection.execute(
             r#"
             UPDATE activity_entries
-            SET ended_at = ?1,
+            SET ended_at = COALESCE(last_seen_at, ?1),
                 duration_seconds = CAST(
-                  (julianday(?1) - julianday(started_at)) * 86400 AS INTEGER
+                  (julianday(COALESCE(last_seen_at, ?1)) - julianday(started_at)) * 86400 AS INTEGER
                 )
             WHERE ended_at = started_at
                OR (duration_seconds < 3
