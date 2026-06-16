@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::Utc;
 use chrono::Timelike;
+use chrono::Utc;
 
 use crate::credential::resolve_api_key;
 use crate::models::AiSummary;
@@ -73,14 +73,23 @@ impl Scheduler {
 
             let mut ai_config = config.clone();
             ai_config.api_key = resolved_key.clone();
-            let result = self.generate_block_summary(&day, block_index, &ai_config).await;
+            let result = self
+                .generate_block_summary(&day, block_index, &ai_config)
+                .await;
             match result {
                 Ok(_) => {
-                    eprintln!("[OpenJournal Scheduler] Generated summary for {}/block-{}", day, block_index);
+                    eprintln!(
+                        "[OpenJournal Scheduler] Generated summary for {}/block-{}",
+                        day, block_index
+                    );
                 }
                 Err(e) => {
-                    eprintln!("[OpenJournal Scheduler] Failed to generate {}/block-{}: {}", day, block_index, e);
-                    self.increment_retry(day.as_str(), block_index, &e.to_string()).ok();
+                    eprintln!(
+                        "[OpenJournal Scheduler] Failed to generate {}/block-{}: {}",
+                        day, block_index, e
+                    );
+                    self.increment_retry(day.as_str(), block_index, &e.to_string())
+                        .ok();
                 }
             }
         }
@@ -109,7 +118,11 @@ impl Scheduler {
             if self.has_reached_retry_limit(day, *block_index) {
                 continue;
             }
-            if self.generate_block_summary(day, *block_index, &ai_config).await.is_err() {
+            if self
+                .generate_block_summary(day, *block_index, &ai_config)
+                .await
+                .is_err()
+            {
                 // Continue with next block — best-effort
                 continue;
             }
@@ -120,7 +133,12 @@ impl Scheduler {
     }
 
     /// Generate a summary for one block and store it.
-    async fn generate_block_summary(&self, day: &str, block_index: i32, config: &AiConfig) -> anyhow::Result<()> {
+    async fn generate_block_summary(
+        &self,
+        day: &str,
+        block_index: i32,
+        config: &AiConfig,
+    ) -> anyhow::Result<()> {
         let activities = self.storage.activity_for_day(day)?;
         let blocks = aggregate_blocks(day, &activities);
         let block = blocks

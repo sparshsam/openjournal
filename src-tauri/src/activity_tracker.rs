@@ -122,7 +122,7 @@ impl ActivityTracker {
         Ok(())
     }
 
-    fn flush_current(&mut self) -> anyhow::Result<()> {
+    pub fn flush_current(&mut self) -> anyhow::Result<()> {
         if let Some(open) = self.current.take() {
             let ended_at = Utc::now();
             self.storage
@@ -135,6 +135,8 @@ impl ActivityTracker {
         if let Some(open) = &self.current {
             self.storage
                 .update_activity_end(open.id, open.started_at, Utc::now())?;
+            // Track last_seen for crash recovery
+            let _ = self.storage.touch_last_seen(open.id);
         }
         Ok(())
     }

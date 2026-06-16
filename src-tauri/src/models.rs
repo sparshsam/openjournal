@@ -15,6 +15,16 @@ pub struct AppStatus {
     pub logging_paused: bool,
     pub active_window: String,
     pub db_path: String,
+    pub app_mode: String,
+    pub tracker_running: bool,
+    pub autostart_enabled: bool,
+    pub last_write_at: String,
+    pub last_recovery_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutostartSetting {
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,7 +46,6 @@ pub struct ExportBundle {
     pub summaries: Vec<SummaryBlock>,
 }
 
-/// AI-generated summary record stored in the DB.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiSummary {
     pub id: i64,
@@ -50,14 +59,12 @@ pub struct AiSummary {
     pub token_count: Option<i64>,
     pub status: String,
     pub error_message: Option<String>,
-    // v0.3 scheduler fields
     pub retry_count: i32,
     pub last_attempt_at: Option<String>,
     pub generation_source: String,
     pub queue_status: String,
 }
 
-/// Settings for the automatic background scheduler.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SchedulerSettings {
     pub auto_generate: bool,
@@ -75,7 +82,6 @@ impl Default for SchedulerSettings {
     }
 }
 
-/// The aggregated data sent to the prompt builder.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockActivity {
     pub block_start: String,

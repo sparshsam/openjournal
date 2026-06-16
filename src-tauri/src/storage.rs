@@ -7,6 +7,7 @@ use rusqlite::{params, Connection};
 use crate::credential::{self, CredentialKey};
 use crate::models::ActivityEntry;
 use crate::models::AiSummary;
+use crate::models::AutostartSetting;
 use crate::models::SchedulerSettings;
 use crate::provider::AiConfig;
 
@@ -117,6 +118,10 @@ impl Storage {
         );
         let _ = connection.execute(
             "ALTER TABLE ai_summaries ADD COLUMN queue_status TEXT NOT NULL DEFAULT 'idle'",
+            [],
+        );
+        let _ = connection.execute(
+            "ALTER TABLE activity_entries ADD COLUMN last_seen_at TEXT",
             [],
         );
         Ok(())
@@ -442,7 +447,10 @@ impl Storage {
 
     /// Find blocks that are completed (past their end time) but have no summary or need retry.
     /// Returns (day, block_index) pairs.
-    pub fn find_pending_summary_blocks(&self, days_back: i64) -> anyhow::Result<Vec<(String, i32)>> {
+    pub fn find_pending_summary_blocks(
+        &self,
+        days_back: i64,
+    ) -> anyhow::Result<Vec<(String, i32)>> {
         let connection = self.connection.lock().expect("storage lock failed");
         let mut stmt = connection.prepare(
             r#"
@@ -471,6 +479,87 @@ impl Storage {
             result.push(row?);
         }
         Ok(result)
+    }
+
+    // -----------------------------------------------------------------------
+    // Crash recovery and durability
+    // -----------------------------------------------------------------------
+
+    /// Finalize any activity rows that were open when the app last shut down.
+    /// Handles both clean shutdown and crash recovery.
+    pub fn recover_open_entries(&self) -> anyhow::Result<i64> {
+        let connection = self.connection.lock().expect("storage lock failed");
+        let now_rfc = Utc::now().to_rfc3339();
+        // Update rows where ended_at == started_at (crashed before first refresh tick)
+        // or duration_seconds < 3 (crashed mid-tick)
+        let recovered = connection.execute(
+            r#"
+            UPDATE activity_entries
+            SET ended_at = ?1,
+                duration_seconds = CAST(
+                  (julianday(?1) - julianday(started_at)) * 86400 AS INTEGER
+                )
+            WHERE ended_at = started_at
+               OR (duration_seconds < 3
+                   AND CAST(
+                     (julianday(?1) - julianday(started_at)) * 86400 AS INTEGER
+                   ) > duration_seconds)
+            "#,
+            params![now_rfc],
+        )?;
+        let _ = connection.execute(
+            "INSERT INTO settings(key, value, updated_at) VALUES ('last_startup_recovery', ?1, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP",
+            params![now_rfc],
+        );
+        Ok(recovered as i64)
+    }
+
+    /// Touch last_seen_at for an active activity row.
+    pub fn touch_last_seen(&self, activity_id: i64) -> anyhow::Result<()> {
+        let connection = self.connection.lock().expect("storage lock failed");
+        connection.execute(
+            "UPDATE activity_entries SET last_seen_at = ?1 WHERE id = ?2",
+            params![Utc::now().to_rfc3339(), activity_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_last_recovery_at(&self) -> String {
+        let connection = self.connection.lock().expect("storage lock failed");
+        connection
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'last_startup_recovery'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .unwrap_or_else(|_| "never".to_string())
+    }
+
+    // -----------------------------------------------------------------------
+    // Autostart setting
+    // -----------------------------------------------------------------------
+
+    pub fn get_autostart_setting(&self) -> AutostartSetting {
+        let connection = self.connection.lock().expect("storage lock failed");
+        let mut stmt = connection
+            .prepare("SELECT value FROM ai_config WHERE key = 'autostart'")
+            .expect("prepare");
+        let val: Option<String> = stmt.query_row([], |row| row.get(0)).ok();
+        drop(stmt);
+        match val {
+            Some(j) => serde_json::from_str(&j).unwrap_or(AutostartSetting { enabled: true }),
+            None => AutostartSetting { enabled: true },
+        }
+    }
+
+    pub fn set_autostart_setting(&self, setting: &AutostartSetting) -> anyhow::Result<()> {
+        let json = serde_json::to_string(setting)?;
+        let connection = self.connection.lock().expect("storage lock failed");
+        connection.execute(
+            r#"INSERT INTO ai_config(key, value) VALUES ('autostart', ?1) ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+            params![json],
+        )?;
+        Ok(())
     }
 
     /// Delete all AI summaries for a day. Reserved for future batch operations.
@@ -512,5 +601,64 @@ mod tests {
         assert_eq!(storage.activity_for_day(&day).expect("before").len(), 1);
         storage.delete_day(&day).expect("delete day");
         assert_eq!(storage.activity_for_day(&day).expect("after").len(), 0);
+    }
+
+    #[test]
+    fn recover_open_entries_finalizes_stale_rows() {
+        let storage = test_storage("recover");
+        let started_at = Utc::now() - Duration::minutes(30);
+        // Simulate a crash: activity started but ended_at == started_at
+        let id = storage
+            .start_activity("Code.exe", "Crashed session", started_at)
+            .expect("start activity");
+        // ended_at is same as started_at — simulate crash before first touch
+        storage
+            .update_activity_end(id, started_at, started_at)
+            .expect("update with same time");
+
+        let day = started_at.format("%Y-%m-%d").to_string();
+        assert_eq!(storage.activity_for_day(&day).expect("before").len(), 1);
+        let entry = &storage.activity_for_day(&day).expect("entries")[0];
+        assert_eq!(entry.duration_seconds, 0); // crash left 0 duration
+
+        // Recover
+        let recovered = storage.recover_open_entries().expect("recover");
+        assert!(recovered > 0, "Should have recovered at least one entry");
+
+        let entries = storage.activity_for_day(&day).expect("after");
+        assert_eq!(entries.len(), 1, "Should still have the same entry");
+        let entry = &entries[0];
+        assert!(
+            entry.duration_seconds > 0,
+            "Duration should be updated after recovery, got {}",
+            entry.duration_seconds
+        );
+        assert!(entry.ended_at.is_some());
+        assert_ne!(entry.ended_at, Some(entry.started_at.clone()));
+    }
+
+    #[test]
+    fn repeated_startup_does_not_duplicate_rows() {
+        let storage = test_storage("dedup");
+        let started_at = Utc::now() - Duration::hours(2);
+        let id = storage
+            .start_activity("Code.exe", "First session", started_at)
+            .expect("start");
+        storage
+            .update_activity_end(id, started_at, started_at)
+            .expect("crash");
+
+        let day = started_at.format("%Y-%m-%d").to_string();
+        assert_eq!(storage.activity_for_day(&day).expect("before").len(), 1);
+
+        // First recovery
+        let r1 = storage.recover_open_entries().expect("recover 1");
+        assert!(r1 > 0);
+
+        // Second recovery — should find nothing
+        let r2 = storage.recover_open_entries().expect("recover 2");
+        assert_eq!(r2, 0, "Repeated recovery should not find stale rows");
+
+        assert_eq!(storage.activity_for_day(&day).expect("after").len(), 1);
     }
 }
