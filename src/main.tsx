@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import './style.css';
 
-const APP_VERSION = '0.2.2';
+const APP_VERSION = '0.3.0';
 
 // -----------------------------------------------------------------------
 // Types

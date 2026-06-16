@@ -41,15 +41,38 @@ pub struct ExportBundle {
 pub struct AiSummary {
     pub id: i64,
     pub day: String,
-    pub block_index: i32, // 0-7 (8 x 3-hour blocks)
+    pub block_index: i32,
     pub block_start: String,
     pub block_end: String,
-    pub summary_json: String, // full JSON payload from provider
+    pub summary_json: String,
     pub model_name: String,
     pub generated_at: String,
     pub token_count: Option<i64>,
-    pub status: String, // pending | completed | failed
+    pub status: String,
     pub error_message: Option<String>,
+    // v0.3 scheduler fields
+    pub retry_count: i32,
+    pub last_attempt_at: Option<String>,
+    pub generation_source: String,
+    pub queue_status: String,
+}
+
+/// Settings for the automatic background scheduler.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SchedulerSettings {
+    pub auto_generate: bool,
+    pub generate_on_startup: bool,
+    pub retry_failed: bool,
+}
+
+impl Default for SchedulerSettings {
+    fn default() -> Self {
+        Self {
+            auto_generate: true,
+            generate_on_startup: true,
+            retry_failed: true,
+        }
+    }
 }
 
 /// The aggregated data sent to the prompt builder.
@@ -60,6 +83,6 @@ pub struct BlockActivity {
     pub entries: Vec<ActivityEntry>,
     pub total_focus_seconds: i64,
     pub context_switches: usize,
-    pub app_breakdown: Vec<(String, i64)>, // (app_name, total_seconds)
+    pub app_breakdown: Vec<(String, i64)>,
     pub idle_minutes: i64,
 }

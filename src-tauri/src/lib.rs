@@ -3,15 +3,17 @@ mod credential;
 mod export;
 mod models;
 mod provider;
+mod scheduler;
 mod storage;
 mod summarizer;
 
+use scheduler::Scheduler;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use activity_tracker::ActivityTracker;
 use credential::{ApiKeyStatus, CredentialKey};
-use models::{ActivityEntry, AiSummary, AppStatus, SummaryBlock};
+use models::{ActivityEntry, AiSummary, AppStatus, SchedulerSettings, SummaryBlock};
 use provider::{create_provider, AiConfig, ConnectionTestResult};
 use storage::Storage;
 use summarizer::{aggregate_blocks, build_summary_prompt};
@@ -215,10 +217,14 @@ async fn generate_ai_summary(
         block_end: result.block_end.clone(),
         summary_json,
         model_name: result.model_used.clone(),
-        generated_at: now,
+        generated_at: now.clone(),
         token_count: None,
         status: "completed".to_string(),
         error_message: None,
+        retry_count: 0,
+        last_attempt_at: Some(now),
+        generation_source: "manual".to_string(),
+        queue_status: "idle".to_string(),
     };
     state
         .storage
@@ -303,6 +309,20 @@ fn delete_credential_api_key() -> Result<(), String> {
         .map_err(|e| format!("Failed to delete: {e}"))
 }
 
+// -----------------------------------------------------------------------
+// v0.3 Scheduler commands
+// -----------------------------------------------------------------------
+
+#[tauri::command]
+fn get_scheduler_settings(state: State<'_, AppState>) -> Result<SchedulerSettings, String> {
+    state.storage.get_scheduler_settings().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_scheduler_settings(settings: SchedulerSettings, state: State<'_, AppState>) -> Result<(), String> {
+    state.storage.set_scheduler_settings(&settings).map_err(|e| e.to_string())
+}
+
 fn app_data_dir(app: &AppHandle) -> anyhow::Result<PathBuf> {
     let dir = app.path().app_data_dir()?;
     std::fs::create_dir_all(&dir)?;
@@ -363,6 +383,10 @@ pub fn run() {
             let tracker = Arc::new(Mutex::new(ActivityTracker::new(storage.clone())?));
             install_tray(app, tracker.clone())?;
             activity_tracker::spawn_poll_loop(tracker.clone());
+            // Spawn the background summary scheduler
+            let scheduler = Arc::new(Scheduler::new(storage.clone()));
+            scheduler.spawn_background_loop();
+            scheduler.spawn_startup_catchup();
             app.manage(AppState { storage, tracker });
             Ok(())
         })
@@ -387,6 +411,9 @@ pub fn run() {
             get_api_key_status,
             save_credential_api_key,
             delete_credential_api_key,
+            // v0.3 Scheduler commands
+            get_scheduler_settings,
+            set_scheduler_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running OpenJournal");

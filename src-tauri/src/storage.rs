@@ -7,6 +7,7 @@ use rusqlite::{params, Connection};
 use crate::credential::{self, CredentialKey};
 use crate::models::ActivityEntry;
 use crate::models::AiSummary;
+use crate::models::SchedulerSettings;
 use crate::provider::AiConfig;
 
 #[derive(Clone)]
@@ -96,8 +97,28 @@ impl Storage {
               key TEXT PRIMARY KEY,
               value TEXT NOT NULL
             );
+
+            -- v0.3: Additional fields for ai_summaries (safe ALTER TABLE)
+            -- Must be separate statements because SQLite batch may fail on duplicate ALTER.
             "#,
         )?;
+        // v0.3: Add columns if they don't exist (each ALTER TABLE in its own exec)
+        let _ = connection.execute(
+            "ALTER TABLE ai_summaries ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+        let _ = connection.execute(
+            "ALTER TABLE ai_summaries ADD COLUMN last_attempt_at TEXT",
+            [],
+        );
+        let _ = connection.execute(
+            "ALTER TABLE ai_summaries ADD COLUMN generation_source TEXT NOT NULL DEFAULT 'manual'",
+            [],
+        );
+        let _ = connection.execute(
+            "ALTER TABLE ai_summaries ADD COLUMN queue_status TEXT NOT NULL DEFAULT 'idle'",
+            [],
+        );
         Ok(())
     }
 
@@ -315,14 +336,19 @@ impl Storage {
             r#"
             INSERT INTO ai_summaries
               (day, block_index, block_start, block_end, summary_json,
-               model_name, generated_at, token_count, status, error_message)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+               model_name, generated_at, token_count, status, error_message,
+               retry_count, last_attempt_at, generation_source, queue_status)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
             ON CONFLICT(day, block_index, model_name) DO UPDATE SET
               summary_json = excluded.summary_json,
               generated_at = excluded.generated_at,
               token_count = excluded.token_count,
               status = excluded.status,
-              error_message = excluded.error_message
+              error_message = excluded.error_message,
+              retry_count = excluded.retry_count,
+              last_attempt_at = excluded.last_attempt_at,
+              generation_source = excluded.generation_source,
+              queue_status = excluded.queue_status
             "#,
             params![
                 summary.day,
@@ -335,6 +361,10 @@ impl Storage {
                 summary.token_count,
                 summary.status,
                 summary.error_message,
+                summary.retry_count,
+                summary.last_attempt_at,
+                summary.generation_source,
+                summary.queue_status,
             ],
         )?;
         Ok(())
@@ -346,7 +376,8 @@ impl Storage {
             r#"
             SELECT id, day, block_index, block_start, block_end,
                    summary_json, model_name, generated_at, token_count,
-                   status, error_message
+                   status, error_message,
+                   retry_count, last_attempt_at, generation_source, queue_status
             FROM ai_summaries
             WHERE day = ?1
             ORDER BY block_index ASC
@@ -365,6 +396,10 @@ impl Storage {
                 token_count: row.get(8)?,
                 status: row.get(9)?,
                 error_message: row.get(10)?,
+                retry_count: row.get(11)?,
+                last_attempt_at: row.get(12)?,
+                generation_source: row.get(13)?,
+                queue_status: row.get(14)?,
             })
         })?;
         let mut result = Vec::new();
@@ -378,6 +413,64 @@ impl Storage {
         let connection = self.connection.lock().expect("storage lock failed");
         connection.execute("DELETE FROM ai_summaries WHERE id = ?1", params![id])?;
         Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Scheduler
+    // -----------------------------------------------------------------------
+
+    pub fn get_scheduler_settings(&self) -> anyhow::Result<SchedulerSettings> {
+        let connection = self.connection.lock().expect("storage lock failed");
+        let mut stmt = connection.prepare("SELECT value FROM ai_config WHERE key = ?1")?;
+        let json_str: Option<String> = stmt.query_row(params!["scheduler"], |row| row.get(0)).ok();
+        drop(stmt);
+        match json_str {
+            Some(json) => Ok(serde_json::from_str(&json)?),
+            None => Ok(SchedulerSettings::default()),
+        }
+    }
+
+    pub fn set_scheduler_settings(&self, settings: &SchedulerSettings) -> anyhow::Result<()> {
+        let json = serde_json::to_string(settings)?;
+        let connection = self.connection.lock().expect("storage lock failed");
+        connection.execute(
+            r#"INSERT INTO ai_config(key, value) VALUES ('scheduler', ?1) ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+            params![json],
+        )?;
+        Ok(())
+    }
+
+    /// Find blocks that are completed (past their end time) but have no summary or need retry.
+    /// Returns (day, block_index) pairs.
+    pub fn find_pending_summary_blocks(&self, days_back: i64) -> anyhow::Result<Vec<(String, i32)>> {
+        let connection = self.connection.lock().expect("storage lock failed");
+        let mut stmt = connection.prepare(
+            r#"
+            SELECT DISTINCT activity.date_str, (CAST(strftime('%H', activity.max_start) AS INTEGER) / 3) * 3
+            FROM (
+              SELECT substr(started_at, 1, 10) AS date_str,
+                     MAX(started_at) AS max_start
+              FROM activity_entries
+              GROUP BY date_str
+              HAVING date_str >= date('now', ?1)
+            ) activity
+            LEFT JOIN ai_summaries summary
+              ON summary.day = activity.date_str
+             AND summary.block_index = (CAST(strftime('%H', activity.max_start) AS INTEGER) / 3) * 3 - 3
+            WHERE summary.id IS NULL
+               OR (summary.status = 'failed' AND summary.retry_count < 2)
+            ORDER BY activity.date_str ASC, 2 ASC
+            "#,
+        )?;
+        let since = format!("-{} days", days_back);
+        let rows = stmt.query_map(params![since], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?))
+        })?;
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row?);
+        }
+        Ok(result)
     }
 
     /// Delete all AI summaries for a day. Reserved for future batch operations.

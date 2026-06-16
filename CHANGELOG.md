@@ -5,7 +5,30 @@ All notable changes to OpenJournal will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.2] - 2026-06-15
+## [0.3.0] - Unreleased
+
+### Added
+
+- Background summary scheduler running every 15 minutes
+- Startup catch-up: generates missing summaries for last 7 days on launch
+- `Scheduler` module with `tick()`, `generate_missing_days()`, `generate_block_summary()`
+- `SchedulerSettings` with auto-generate, startup catch-up, and retry toggles
+- `ai_summaries` v0.3 migration: `retry_count`, `last_attempt_at`, `generation_source` (manual/automatic), `queue_status` (queued/running/idle)
+- Retry logic: max 2 retries, exponential backoff (5 min, 30 min), auto-set to `failed` after limit
+- `generation_source: "automatic"` for scheduler-generated summaries vs `"manual"` for user-triggered
+- `get_scheduler_settings` / `set_scheduler_settings` Tauri commands
+- Auto-generate skips active blocks (never summarize an in-progress 3-hour block)
+- Lock-free scheduling: one summary at a time per block via `find_pending_summary_blocks`
+- Best-effort behavior: failures never block tracking or subsequent blocks
+
+### Changed
+
+- `AiSummary` struct extended with 4 new fields
+- `upsert_ai_summary` and `get_ai_summaries_for_day` queries updated for v0.3 schema
+- Storage migration adds columns via `ALTER TABLE` (safe for existing databases)
+- `generate_ai_summary` command now sets `generation_source: "manual"` and `last_attempt_at`
+
+## [0.2.3] - 2026-06-15
 
 ### Added
 
