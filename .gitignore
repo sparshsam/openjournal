@@ -49,3 +49,7 @@ work
 *.njsproj
 *.sln
 *.sw?
+
+# Updater keys (do not commit — generate per developer)
+updater.key
+updater.key.pub

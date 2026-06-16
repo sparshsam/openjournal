@@ -1,7 +1,7 @@
 {
   "name": "openjournal",
   "private": true,
-  "version": "0.3.8",
+  "version": "0.3.9",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "lucide-react": "^1.18.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
