@@ -598,7 +598,8 @@ fn install_tray(
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
             let data_dir = app_data_dir()?;
             let storage = Storage::open(data_dir.join("openjournal.sqlite3"))?;
             storage.migrate()?;
