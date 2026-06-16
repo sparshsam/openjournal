@@ -118,7 +118,7 @@ pub struct DayStats {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BackupInfo {
+pub struct BackupResult {
     pub path: String,
     pub size_bytes: i64,
     pub checksum: String,

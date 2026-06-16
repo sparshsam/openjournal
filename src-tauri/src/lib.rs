@@ -14,8 +14,8 @@ use std::sync::{Arc, Mutex};
 use activity_tracker::ActivityTracker;
 use credential::{ApiKeyStatus, CredentialKey};
 use models::{
-    ActivityEntry, AiSummary, AppStatus, AutostartSetting, DayStats, DiagnosticsExtras, SchedulerSettings,
-    SummaryBlock,
+    ActivityEntry, AiSummary, AppStatus, AutostartSetting, BackupResult, DayStats,
+    DiagnosticsExtras, SchedulerSettings, SummaryBlock,
 };
 use provider::{create_provider, AiConfig, ConnectionTestResult};
 use storage::Storage;
@@ -388,6 +388,14 @@ fn app_data_dir() -> anyhow::Result<PathBuf> {
     Ok(dir)
 }
 
+/// Production backups directory under %LOCALAPPDATA%/OpenJournal/Backups/
+fn backups_dir() -> anyhow::Result<PathBuf> {
+    let base = data_root_dir()?;
+    let dir = base.join("Backups");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
 /// Production exports directory under %%LOCALAPPDATA%%/OpenJournal/Exports/
 fn exports_dir() -> anyhow::Result<PathBuf> {
     let base = data_root_dir()?;
@@ -437,6 +445,54 @@ fn open_logs_folder() -> Result<String, String> {
     let dir = logs_dir().map_err(|e| e.to_string())?;
     let _ = open::that(&dir);
     Ok(dir.display().to_string())
+}
+
+/// Create a timestamped backup of the SQLite database.
+#[tauri::command]
+fn export_backup(state: State<'_, AppState>) -> Result<BackupResult, String> {
+    let backup_dir = backups_dir().map_err(|e| e.to_string())?;
+    let now = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+    let backup_path = backup_dir.join(format!("openjournal-{}.ojbackup", now));
+    let src = state.storage.db_path();
+    std::fs::copy(src, &backup_path).map_err(|e| format!("backup failed: {e}"))?;
+    let size = std::fs::metadata(&backup_path).map(|m| m.len() as i64).unwrap_or(0);
+    let checksum = sha256_hex(&backup_path);
+    Ok(BackupResult { path: backup_path.display().to_string(), size_bytes: size, checksum })
+}
+
+/// Restore a backup from a .ojbackup file.
+#[tauri::command]
+fn restore_backup(path: String, state: State<'_, AppState>) -> Result<String, String> {
+    let src = std::path::Path::new(&path);
+    if !src.exists() { return Err("Backup file not found".to_string()); }
+    let dst = state.storage.db_path().to_path_buf();
+    let now = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+    let pre = dst.parent().unwrap().join(format!("pre-restore-{}.sqlite3", now));
+    let _ = std::fs::copy(&dst, &pre);
+    std::fs::copy(src, &dst).map_err(|e| format!("restore failed: {e}"))?;
+    Ok(format!("Restored. Previous DB at {:?}", pre))
+}
+
+/// Open the backups folder.
+#[tauri::command]
+fn open_backup_folder() -> Result<String, String> {
+    let dir = backups_dir().map_err(|e| e.to_string())?;
+    let _ = open::that(&dir);
+    Ok(dir.display().to_string())
+}
+
+/// Compute SHA256 hex of a file.
+fn sha256_hex(path: &std::path::Path) -> String {
+    use std::io::Read;
+    use sha2::{Digest, Sha256};
+    if let Ok(mut f) = std::fs::File::open(path) {
+        let mut buf = Vec::new();
+        if f.read_to_end(&mut buf).is_ok() {
+            let hash = Sha256::digest(&buf);
+            return format!("{:x}", hash);
+        }
+    }
+    String::new()
 }
 
 /// Enable or disable Windows autostart via HKCU registry Run key.
@@ -590,6 +646,9 @@ pub fn run() {
             get_day_activity,
             get_day_stats_cmd,
             get_diagnostics_cmd,
+            export_backup,
+            restore_backup,
+            open_backup_folder,
             open_data_folder,
             open_exports_folder,
             open_logs_folder,
