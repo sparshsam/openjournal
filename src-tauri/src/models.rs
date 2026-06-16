@@ -92,3 +92,15 @@ pub struct BlockActivity {
     pub app_breakdown: Vec<(String, i64)>,
     pub idle_minutes: i64,
 }
+
+/// Authoritative per-day stats computed from SQLite, not client state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DayStats {
+    pub day: String,
+    pub tracked_seconds: i64,
+    pub apps_used: usize,
+    pub focused_windows: usize,
+    pub storage_backend: String,
+    pub last_activity_write_at: String,
+    pub active_entry_duration_seconds: i64,
+}

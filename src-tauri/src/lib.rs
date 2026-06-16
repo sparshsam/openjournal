@@ -14,7 +14,8 @@ use std::sync::{Arc, Mutex};
 use activity_tracker::ActivityTracker;
 use credential::{ApiKeyStatus, CredentialKey};
 use models::{
-    ActivityEntry, AiSummary, AppStatus, AutostartSetting, SchedulerSettings, SummaryBlock,
+    ActivityEntry, AiSummary, AppStatus, AutostartSetting, DayStats, SchedulerSettings,
+    SummaryBlock,
 };
 use provider::{create_provider, AiConfig, ConnectionTestResult};
 use storage::Storage;
@@ -87,6 +88,17 @@ fn get_day_activity(day: String, state: State<'_, AppState>) -> Result<Vec<Activ
     state
         .storage
         .activity_for_day(&day)
+        .map_err(|error| error.to_string())
+}
+
+/// Authoritative day stats from backend, not client-side React state.
+/// Includes active row contribution so tracked time is accurate even
+/// when the window is hidden.
+#[tauri::command]
+fn get_day_stats_cmd(day: String, state: State<'_, AppState>) -> Result<DayStats, String> {
+    state
+        .storage
+        .get_day_stats(&day)
         .map_err(|error| error.to_string())
 }
 
@@ -501,6 +513,7 @@ pub fn run() {
             get_status,
             set_logging_paused,
             get_day_activity,
+            get_day_stats_cmd,
             get_summary_blocks,
             set_blocklist,
             export_day,

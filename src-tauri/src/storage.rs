@@ -8,6 +8,7 @@ use crate::credential::{self, CredentialKey};
 use crate::models::ActivityEntry;
 use crate::models::AiSummary;
 use crate::models::AutostartSetting;
+use crate::models::DayStats;
 use crate::models::SchedulerSettings;
 use crate::provider::AiConfig;
 
@@ -199,6 +200,65 @@ impl Storage {
             entries.push(row?);
         }
         Ok(entries)
+    }
+
+    /// Get authoritative day stats from SQLite, including active row contribution.
+    /// This is the source of truth for tracked-time display, not client-side React state.
+    pub fn get_day_stats(&self, day: &str) -> anyhow::Result<DayStats> {
+        let date = NaiveDate::parse_from_str(day, "%Y-%m-%d")?;
+        let start = date.and_hms_opt(0, 0, 0).expect("valid midnight").and_utc();
+        let end = start + Duration::days(1);
+        let connection = self.connection.lock().expect("storage lock failed");
+
+        let tracked_seconds: i64 = connection.query_row(
+            "SELECT COALESCE(SUM(duration_seconds), 0) FROM activity_entries WHERE started_at >= ?1 AND started_at < ?2",
+            params![start.to_rfc3339(), end.to_rfc3339()],
+            |row| row.get(0),
+        )?;
+
+        let apps_used: usize = connection.query_row(
+            "SELECT COUNT(DISTINCT app_name) FROM activity_entries WHERE started_at >= ?1 AND started_at < ?2",
+            params![start.to_rfc3339(), end.to_rfc3339()],
+            |row| row.get(0),
+        )?;
+
+        let focused_windows: usize = connection.query_row(
+            "SELECT COUNT(*) FROM (SELECT DISTINCT app_name, window_title FROM activity_entries WHERE started_at >= ?1 AND started_at < ?2)",
+            params![start.to_rfc3339(), end.to_rfc3339()],
+            |row| row.get(0),
+        )?;
+
+        let last_write: Option<String> = connection.query_row(
+            "SELECT MAX(last_seen_at) FROM activity_entries WHERE started_at >= ?1 AND started_at < ?2",
+            params![start.to_rfc3339(), end.to_rfc3339()],
+            |row| row.get(0),
+        ).ok().flatten();
+
+        // Compute active entry contribution: the most recent row with no proper end
+        // uses (now - started_at) for its true duration
+        let now_rfc = Utc::now().to_rfc3339();
+        let active_entry_duration_seconds: i64 = connection.query_row(
+            r#"
+            SELECT COALESCE(SUM(
+              CAST((julianday(COALESCE(ended_at, last_seen_at, ?1)) - julianday(started_at)) * 86400 AS INTEGER)
+            ), 0)
+            FROM activity_entries
+            WHERE started_at >= ?2 AND started_at < ?3
+              AND (ended_at IS NULL OR ended_at = started_at OR duration_seconds < 3)
+            "#,
+            params![now_rfc, start.to_rfc3339(), end.to_rfc3339()],
+            |row| row.get(0),
+        ).unwrap_or(0);
+
+        Ok(DayStats {
+            day: day.to_string(),
+            tracked_seconds,
+            apps_used,
+            focused_windows,
+            storage_backend: "SQLite (WAL)".to_string(),
+            last_activity_write_at: last_write.unwrap_or_else(|| "never".to_string()),
+            active_entry_duration_seconds,
+        })
     }
 
     pub fn delete_day(&self, day: &str) -> anyhow::Result<()> {
