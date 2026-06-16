@@ -4,7 +4,6 @@ use std::collections::BTreeMap;
 use chrono::{NaiveDate, Timelike};
 
 use crate::models::{ActivityEntry, BlockActivity, SummaryBlock};
-use crate::provider::{create_provider, AiConfig, GeneratedSummary};
 
 // ---------------------------------------------------------------------------
 // Prompt builder — separate from provider logic
@@ -162,53 +161,4 @@ fn summarize_placeholder(block: &BlockActivity) -> SummaryBlock {
     }
 }
 
-// ---------------------------------------------------------------------------
-// AI generation — runs in a spawned task
-// ---------------------------------------------------------------------------
-
-/// Generate a summary for one block using the configured provider.
-/// Returns None if AI is disabled.
-/// Reserved for future async/background batch generation.
-#[allow(dead_code)]
-pub async fn generate_ai_summary(
-    config: &AiConfig,
-    block: &BlockActivity,
-) -> anyhow::Result<GeneratedSummary> {
-    if !config.enabled {
-        anyhow::bail!("AI summaries are disabled");
-    }
-    let prompt = build_summary_prompt(block);
-    let provider = create_provider(config)?;
-    provider.generate_summary(&prompt)
-}
-
-/// Generate AI summaries for all blocks that have activity.
-/// Returns (completed, failed) counts.
-/// Reserved for future background batch generation.
-#[allow(dead_code)]
-pub async fn generate_all_block_summaries(
-    config: &AiConfig,
-    blocks: &[BlockActivity],
-) -> (usize, usize) {
-    if !config.enabled || blocks.is_empty() {
-        return (0, 0);
-    }
-    let mut completed = 0usize;
-    let mut failed = 0usize;
-    for block in blocks {
-        if block.entries.is_empty() {
-            continue;
-        }
-        match generate_ai_summary(config, block).await {
-            Ok(_) => completed += 1,
-            Err(_) => {
-                failed += 1;
-                if failed >= 2 {
-                    // stop after 2 consecutive failures
-                    break;
-                }
-            }
-        }
-    }
-    (completed, failed)
-}
+// ── (AI generation is handled directly in lib.rs via Tauri commands) ──

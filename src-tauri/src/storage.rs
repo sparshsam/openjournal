@@ -634,13 +634,23 @@ impl Storage {
 
     pub fn get_diagnostics_extras(&self) -> anyhow::Result<DiagnosticsExtras> {
         let connection = self.connection.lock().expect("storage lock failed");
-        let db_size: i64 = std::fs::metadata(&self.path).map(|m| m.len() as i64).unwrap_or(0);
-        let total_tracked_days: i64 = connection.query_row(
-            "SELECT COUNT(DISTINCT substr(started_at,1,10)) FROM activity_entries", [], |r| r.get(0)
-        ).unwrap_or(0);
+        let db_size: i64 = std::fs::metadata(&self.path)
+            .map(|m| m.len() as i64)
+            .unwrap_or(0);
+        let total_tracked_days: i64 = connection
+            .query_row(
+                "SELECT COUNT(DISTINCT substr(started_at,1,10)) FROM activity_entries",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
         let exports_dir = if cfg!(target_os = "windows") {
             std::env::var("LOCALAPPDATA")
-                .map(|a| std::path::PathBuf::from(a).join("OpenJournal").join("Exports"))
+                .map(|a| {
+                    std::path::PathBuf::from(a)
+                        .join("OpenJournal")
+                        .join("Exports")
+                })
                 .unwrap_or_else(|_| std::env::temp_dir().join("OpenJournal-Exports"))
         } else {
             dirs::data_dir()
@@ -648,7 +658,10 @@ impl Storage {
                 .unwrap_or_else(|| std::env::temp_dir().join("OpenJournal-Exports"))
         };
         let _ = std::fs::create_dir_all(&exports_dir);
-        let export_count: i64 = exports_dir.read_dir().map(|e| e.count() as i64).unwrap_or(0);
+        let export_count: i64 = exports_dir
+            .read_dir()
+            .map(|e| e.count() as i64)
+            .unwrap_or(0);
         let last_summary = connection.query_row(
             "SELECT generated_at FROM ai_summaries WHERE status = 'completed' ORDER BY generated_at DESC LIMIT 1",
             [], |r| r.get::<_, String>(0)
@@ -657,11 +670,17 @@ impl Storage {
             "SELECT generated_at FROM ai_summaries WHERE status = 'failed' ORDER BY generated_at DESC LIMIT 1",
             [], |r| r.get::<_, String>(0)
         ).unwrap_or_else(|_| "never".to_string());
-        let ai: String = connection.query_row(
-            "SELECT value FROM ai_config WHERE key = 'config'", [], |r| r.get::<_, String>(0)
-        ).unwrap_or_else(|_| "{}".to_string());
+        let ai: String = connection
+            .query_row(
+                "SELECT value FROM ai_config WHERE key = 'config'",
+                [],
+                |r| r.get::<_, String>(0),
+            )
+            .unwrap_or_else(|_| "{}".to_string());
         let ai_enabled = serde_json::from_str::<serde_json::Value>(&ai)
-            .ok().and_then(|v| v.get("enabled").and_then(|e| e.as_bool())).unwrap_or(false);
+            .ok()
+            .and_then(|v| v.get("enabled").and_then(|e| e.as_bool()))
+            .unwrap_or(false);
         let exe = std::env::current_exe().unwrap_or_default();
         Ok(DiagnosticsExtras {
             db_size_bytes: db_size,
@@ -675,14 +694,6 @@ impl Storage {
             uptime_seconds: 0,
             exe_path: exe.display().to_string(),
         })
-    }
-
-    /// Delete all AI summaries for a day. Reserved for future batch operations.
-    #[allow(dead_code)]
-    pub fn delete_ai_summaries_for_day(&self, day: &str) -> anyhow::Result<()> {
-        let connection = self.connection.lock().expect("storage lock failed");
-        connection.execute("DELETE FROM ai_summaries WHERE day = ?1", params![day])?;
-        Ok(())
     }
 }
 

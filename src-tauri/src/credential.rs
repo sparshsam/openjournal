@@ -14,16 +14,12 @@ const SERVICE_NAME: &str = "OpenJournal";
 /// Credential store key names for different providers.
 pub enum CredentialKey {
     DeepSeek,
-    #[allow(dead_code)]
-    /// Reserved for future OpenAI-compatible provider credential storage.
-    OpenAiCompatible,
 }
 
 impl CredentialKey {
     fn as_str(&self) -> &'static str {
         match self {
             CredentialKey::DeepSeek => "deepseek_api_key",
-            CredentialKey::OpenAiCompatible => "openai_compatible_api_key",
         }
     }
 }

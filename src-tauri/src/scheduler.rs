@@ -12,7 +12,6 @@ use crate::summarizer::{aggregate_blocks, build_summary_prompt};
 
 /// Background scheduler for automatic summary generation.
 /// Runs every 15 minutes, never blocks tracking.
-
 pub struct Scheduler {
     storage: Storage,
 }

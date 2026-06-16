@@ -43,7 +43,9 @@ pub fn export_encrypted_backup(
     output.extend_from_slice(&ciphertext);
     std::fs::write(output_path, &output).context("write backup")?;
 
-    let size = std::fs::metadata(output_path).map(|m| m.len() as i64).unwrap_or(0);
+    let size = std::fs::metadata(output_path)
+        .map(|m| m.len() as i64)
+        .unwrap_or(0);
     let checksum = format!("{:x}", Sha256::digest(&output));
     Ok((size, checksum))
 }
@@ -82,12 +84,19 @@ pub fn decrypt_and_restore(
 
     // Pre-restore safety backup
     let now = chrono::Utc::now().format("%Y%m%d-%H%M%S");
-    let pre_path = db_path.parent().unwrap().join(format!("pre-restore-{}.sqlite3", now));
+    let pre_path = db_path
+        .parent()
+        .unwrap()
+        .join(format!("pre-restore-{}.sqlite3", now));
     if db_path.exists() {
         std::fs::copy(db_path, &pre_path).ok();
     }
 
     std::fs::write(db_path, &plaintext).context("write restored database")?;
     let cksum = format!("{:x}", Sha256::digest(&data));
-    Ok(format!("Restored. Backup checksum: {}. Pre-restore DB: {}", &cksum[..12], pre_path.display()))
+    Ok(format!(
+        "Restored. Backup checksum: {}. Pre-restore DB: {}",
+        &cksum[..12],
+        pre_path.display()
+    ))
 }

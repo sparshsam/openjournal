@@ -417,11 +417,12 @@ fn logs_dir() -> anyhow::Result<PathBuf> {
 /// Root data directory: %%LOCALAPPDATA%%/OpenJournal/
 fn data_root_dir() -> anyhow::Result<PathBuf> {
     let base = if cfg!(target_os = "windows") {
-        let local_app_data = std::env::var("LOCALAPPDATA")
-            .map_err(|_| anyhow::anyhow!("LOCALAPPDATA not set"))?;
+        let local_app_data =
+            std::env::var("LOCALAPPDATA").map_err(|_| anyhow::anyhow!("LOCALAPPDATA not set"))?;
         PathBuf::from(local_app_data).join("OpenJournal")
     } else {
-        dirs::data_dir().map(|d| d.join("OpenJournal"))
+        dirs::data_dir()
+            .map(|d| d.join("OpenJournal"))
             .ok_or_else(|| anyhow::anyhow!("Cannot determine data directory"))?
     };
     std::fs::create_dir_all(&base)?;
@@ -456,20 +457,30 @@ fn export_backup(passphrase: String, state: State<'_, AppState>) -> Result<Backu
     let now = chrono::Utc::now().format("%Y%m%d-%H%M%S");
     let backup_path = backup_dir.join(format!("openjournal-{}.ojbackup", now));
     let src = state.storage.db_path().to_path_buf();
-    
+
     let (size, checksum) = backup::export_encrypted_backup(&src, &backup_path, &passphrase)
         .map_err(|e| format!("backup failed: {e}"))?;
-    
-    Ok(BackupResult { path: backup_path.display().to_string(), size_bytes: size, checksum })
+
+    Ok(BackupResult {
+        path: backup_path.display().to_string(),
+        size_bytes: size,
+        checksum,
+    })
 }
 
 /// Restore a backup from an encrypted .ojbackup file.
 #[tauri::command]
-fn restore_backup(path: String, passphrase: String, state: State<'_, AppState>) -> Result<String, String> {
+fn restore_backup(
+    path: String,
+    passphrase: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
     let backup_path = std::path::Path::new(&path);
-    if !backup_path.exists() { return Err("Backup file not found".to_string()); }
+    if !backup_path.exists() {
+        return Err("Backup file not found".to_string());
+    }
     let db_path = state.storage.db_path().to_path_buf();
-    
+
     backup::decrypt_and_restore(backup_path, &db_path, &passphrase)
         .map_err(|e| format!("restore failed: {e}"))
 }
@@ -480,20 +491,6 @@ fn open_backup_folder() -> Result<String, String> {
     let dir = backups_dir().map_err(|e| e.to_string())?;
     let _ = open::that(&dir);
     Ok(dir.display().to_string())
-}
-
-/// Compute SHA256 hex of a file.
-fn sha256_hex(path: &std::path::Path) -> String {
-    use std::io::Read;
-    use sha2::{Digest, Sha256};
-    if let Ok(mut f) = std::fs::File::open(path) {
-        let mut buf = Vec::new();
-        if f.read_to_end(&mut buf).is_ok() {
-            let hash = Sha256::digest(&buf);
-            return format!("{:x}", hash);
-        }
-    }
-    String::new()
 }
 
 /// Enable or disable Windows autostart via HKCU registry Run key.
