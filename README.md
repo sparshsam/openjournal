@@ -5,11 +5,13 @@
 **Privacy-first local activity journal for Windows.**
 
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
-[![Rust](https://img.shields.io/badge/Rust-1.96+-orange.svg)]()
-[![Tauri](https://img.shields.io/badge/Tauri-2-green.svg)]()
-[![Platform](https://img.shields.io/badge/Platform-Windows_10_|_11-lightgrey.svg)]()
+[![Status](https://img.shields.io/badge/status-maintained-green.svg)]()
+[![Rust](https://img.shields.io/badge/Rust-1.96+-orange)]()
+[![Tauri](https://img.shields.io/badge/Tauri-2-green)]()
+[![Platform](https://img.shields.io/badge/Platform-Windows_10_|_11-lightgrey)]()
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](CONTRIBUTING.md)
 
-![Hero screenshot placeholder](./src/assets/hero.png)
+![OpenJournal activity timeline](public/hero.png)
 
 </div>
 
@@ -164,15 +166,6 @@ cargo clippy --all-targets
 cargo test
 ```
 
-## Roadmap
-
-| Version | Focus |
-|---------|-------|
-| **v0.1** ✅ | Core architecture, local tracking, exports, privacy controls |
-| **v0.2** 🚧 | **Local AI summaries** — LM Studio/Ollama provider, prompt builder, AI settings, manual generation controls |
-| **v0.3** 🔜 | Multi-day views, calendar navigation, search |
-| **v0.4** 🔜 | Optional encrypted backup / restore |
-
 ## AI Summaries (v0.2)
 
 OpenJournal v0.2 introduces optional AI-powered 3-hour summaries. AI is **disabled by default** — no data is sent anywhere unless you explicitly enable it.
@@ -240,6 +233,28 @@ Or use the standard `DEEPSEEK_API_KEY` variable.
 | Ollama | `http://localhost:11434` | Ollama `/api/chat` |
 
 See [ROADMAP.md](./ROADMAP.md) for the full plan.
+
+## Ecosystem Role
+
+OpenJournal is part of the [sparshsam ecosystem](https://github.com/sparshsam) of privacy-first, local-first tools. It fills the niche of lightweight, automatic activity tracking without cloud dependencies — complementing other tools like [chess-by-sparsh](https://github.com/sparshsam/chess-by-sparsh) and [openscrabble](https://github.com/sparshsam/openscrabble) by providing a private infrastructure layer for personal time awareness.
+
+## Architecture
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the system design — including the Windows Win32 polling loop, SQLite storage layer, export pipeline, and AI summary provider pattern.
+
+## Roadmap
+
+See [ROADMAP.md](./ROADMAP.md) for the full versioned plan.
+
+## Limitations
+
+- **Windows only.** OpenJournal uses Win32 API calls (`GetForegroundWindow`, `GetWindowTextW`) and will not work on macOS or Linux.
+- **No timeline corrections.** Duration is recorded per—focus session. Manual time adjustments are not supported.
+- **No persistent filtering.** Blocklisted apps prevent recording, but past data cannot be retroactively filtered.
+- **No multi-window tracking.** Only the foreground window is recorded. Background windows are not tracked.
+- **No network features.** This is a local-only tool. There is no sync, no cloud backup, and no remote access.
+- **AI summaries are opt-in and experimental.** v0.2 introduces local AI summarization; accuracy depends on the model and provider you choose.
+- **Not a security audit tool.** OpenJournal records app and window titles you can already see. It does not detect malware, keyloggers, or unauthorized access.
 
 ## License
 

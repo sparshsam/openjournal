@@ -43,6 +43,8 @@ work
 .vscode/*
 !.vscode/extensions.json
 .idea
+# OS files
+Thumbs.db
 .DS_Store
 *.suo
 *.ntvs*
