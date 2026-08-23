@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import './style.css';
 
-const APP_VERSION = '0.3.8';
+const APP_VERSION = '0.3.9';
 
 // ── Types ──
 type ActivityEntry = {
@@ -78,6 +78,31 @@ function App() {
   const [pendingEnable, setPendingEnable] = useState(false);
   const [sessionKey, setSessionKey] = useState('');
   const [autostartEnabled, setAutostartEnabled] = useState(false);
+
+  // ── Updater state ──
+  const [updaterEnabled, setUpdaterEnabled] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<'idle'|'checking'|'available'|'downloading'|'ready'|'error'>('idle');
+  const [updateVersion, setUpdateVersion] = useState('');
+  const [downloadProgress, setDownloadProgress] = useState(0);
+
+  // ── Updater logic ──
+  useEffect(() => {
+    if (!canUseTauri) return;
+    invokeCommand<boolean>('is_updater_enabled').then(async (enabled) => {
+      setUpdaterEnabled(enabled);
+      if (enabled) {
+        // Silent startup check
+        try {
+          const { check } = await import('@tauri-apps/plugin-updater');
+          const update = await check();
+          if (update) {
+            setUpdateStatus('available');
+            setUpdateVersion(update.version || '');
+          }
+        } catch { /* silent */ }
+      }
+    }).catch(() => {});
+  }, []);
 
   // ── Lifecycle ──
   const refreshState = useCallback(async () => {
@@ -222,6 +247,59 @@ function App() {
     if (!canUseTauri) return;
     try { const p = await invokeCommand<string>(cmd); setNotice(`Opened ${label}: ${p}`); }
     catch { setNotice(`Could not open ${label}.`); }
+  }
+
+  // ── Updater handlers ──
+  async function handleCheckUpdates() {
+    if (!canUseTauri) return;
+    setUpdateStatus('checking');
+    setNotice('Checking for updates...');
+    try {
+      const { check } = await import('@tauri-apps/plugin-updater');
+      const update = await check();
+      if (update) {
+        setUpdateStatus('available');
+        setUpdateVersion(update.version || '');
+        setNotice(`Update v${update.version} available.`);
+      } else {
+        setUpdateStatus('idle');
+        setNotice('You have the latest version.');
+      }
+    } catch (e) {
+      setUpdateStatus('error');
+      setNotice(`Update check failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  async function handleInstallUpdate() {
+    if (!canUseTauri) return;
+    setUpdateStatus('downloading');
+    setDownloadProgress(0);
+    setNotice('Downloading update...');
+    try {
+      const { check } = await import('@tauri-apps/plugin-updater');
+      const update = await check();
+      if (!update) {
+        setUpdateStatus('idle');
+        setNotice('No update available.');
+        return;
+      }
+      await update.downloadAndInstall((event) => {
+        if (event.event === 'Started' && event.data.contentLength) {
+          setDownloadProgress(0);
+        } else if (event.event === 'Progress') {
+          // chunk-based, estimate progress
+          setDownloadProgress(p => Math.min(p + 5, 95));
+        } else if (event.event === 'Finished') {
+          setDownloadProgress(100);
+        }
+      });
+      setUpdateStatus('ready');
+      setNotice('Update installed. Restarting...');
+    } catch (e) {
+      setUpdateStatus('error');
+      setNotice(`Install failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   const providerBadge = (p: string) => {
@@ -540,7 +618,19 @@ function App() {
                 <button className="text-button small" onClick={() => openFolder('open_data_folder', 'Data')}><FolderOpen size={12} /> Data</button>
                 <button className="text-button small" onClick={() => openFolder('open_exports_folder', 'Exports')}><Download size={12} /> Exports</button>
                 <button className="text-button small" onClick={() => openFolder('open_logs_folder', 'Logs')}><Info size={12} /> Logs</button>
-                <a className="text-button small" href="https://github.com/sparshsam/openjournal/releases" target="_blank" rel="noopener noreferrer"><ExternalLink size={12} /> Updates</a>
+                {updaterEnabled ? (
+                  updateStatus === 'idle' || updateStatus === 'error' ? (
+                    <button className="text-button small" onClick={handleCheckUpdates}><RefreshCw size={12} /> Check for updates</button>
+                  ) : updateStatus === 'checking' ? (
+                    <span className="text-button small disabled"><RefreshCw size={12} className="spinner" /> Checking...</span>
+                  ) : updateStatus === 'available' ? (
+                    <button className="text-button small primary" onClick={handleInstallUpdate}><Download size={12} /> Install v{updateVersion}</button>
+                  ) : updateStatus === 'downloading' ? (
+                    <span className="text-button small disabled"><Download size={12} /> Downloading {downloadProgress}%</span>
+                  ) : null
+                ) : (
+                  <a className="text-button small" href="https://github.com/sparshsam/openjournal/releases" target="_blank" rel="noopener noreferrer"><ExternalLink size={12} /> Updates</a>
+                )}
               </div>
               {canUseTauri && (
                 <div className="autostart-section" style={{ marginTop: 12 }}>

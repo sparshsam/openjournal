@@ -1,6 +1,6 @@
 [package]
 name = "openjournal"
-version = "0.3.8"
+version = "0.3.9"
 description = "Privacy-first local activity journal for Windows"
 authors = ["OpenJournal contributors"]
 license = "AGPL-3.0-or-later"
@@ -27,6 +27,7 @@ aes-gcm = "0.10"
 argon2 = "0.5"
 aead = "0.5"
 tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-updater = "2"
 open = "5"
 dirs = "5" 
 tokio = { version = "1", features = ["rt-multi-thread", "time"] }

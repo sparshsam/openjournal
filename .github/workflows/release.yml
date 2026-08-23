@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install cargo dependencies
+        run: |
+          cd src-tauri
+          cargo fetch
+
+      - name: npm install
+        run: npm ci
+
+      - name: npm run build
+        run: npm run build
+
+      - name: cargo fmt --check
+        run: cd src-tauri && cargo fmt -- --check
+
+      - name: cargo check
+        run: cd src-tauri && cargo check --target x86_64-pc-windows-msvc
+
+      - name: cargo clippy
+        run: cd src-tauri && cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test
+        run: cd src-tauri && cargo test --target x86_64-pc-windows-msvc
+
+      - name: Build Tauri app
+        run: npm run tauri:build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Find installer
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path src-tauri/target/release/bundle/nsis -Filter "*.exe" | Select-Object -First 1
+          if (-not $installer) {
+            Write-Error "No NSIS installer found"
+            exit 1
+          }
+          echo "INSTALLER_PATH=$($installer.FullName)" >> $env:GITHUB_ENV
+          echo "INSTALLER_NAME=$($installer.Name)" >> $env:GITHUB_ENV
+
+      - name: Generate SHA256
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash -Path "$env:INSTALLER_PATH" -Algorithm SHA256).Hash.ToLower()
+          $shaFile = "$env:INSTALLER_NAME.sha256"
+          "$hash  $env:INSTALLER_NAME" | Out-File -FilePath $shaFile -Encoding ascii
+          echo "SHA256_FILE=$shaFile" >> $env:GITHUB_ENV
+          echo "SHA256_HASH=$hash" >> $env:GITHUB_ENV
+
+      - name: Generate update manifest
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          $installerName = "$env:INSTALLER_NAME"
+          $sha256 = "$env:SHA256_HASH"
+          $manifest = @{
+            version = $version
+            notes = "See https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+            pub_date = (Get-Date -Format "yyyy-MM-dd'T'HH:mm:ss'Z'")
+            platforms = @{
+              "windows-x86_64" = @{
+                signature = ""
+                url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$installerName"
+              }
+            }
+          }
+          $manifest | ConvertTo-Json -Compress | Out-File -FilePath "latest.json" -Encoding utf8
+          echo "MANIFEST=latest.json" >> $env:GITHUB_ENV
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: |
+            ## OpenJournal ${{ github.ref_name }}
+
+            ### Quality Gate
+            - `cargo fmt` — passed
+            - `cargo check` — passed
+            - `cargo clippy -- -D warnings` — passed
+            - `cargo test` — passed
+            - `npm run build` — passed
+            - `npm run tauri:build` — passed
+
+            ### Installer SHA256
+            `${{ env.SHA256_HASH }}`
+          files: |
+            ${{ env.INSTALLER_PATH }}
+            ${{ env.SHA256_FILE }}
+            ${{ env.MANIFEST }}

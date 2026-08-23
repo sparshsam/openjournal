@@ -364,6 +364,13 @@ fn set_scheduler_settings(
         .map_err(|e| e.to_string())
 }
 
+// ── Updater ──
+
+#[tauri::command]
+fn is_updater_enabled() -> bool {
+    std::env::var("ENABLE_UPDATER").as_deref() == Ok("true")
+}
+
 // v0.3.1 Autostart commands
 
 #[tauri::command]
@@ -591,6 +598,8 @@ fn install_tray(
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
             let data_dir = app_data_dir()?;
             let storage = Storage::open(data_dir.join("openjournal.sqlite3"))?;
             storage.migrate()?;
@@ -667,6 +676,7 @@ pub fn run() {
             delete_credential_api_key,
             get_scheduler_settings,
             set_scheduler_settings,
+            is_updater_enabled,
             get_autostart_setting,
             set_autostart_setting,
         ])
